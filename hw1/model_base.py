@@ -203,7 +203,7 @@ class HW1Model:
                 train_seq_stack = np.load(fast_train_seq_path)[()]
                 test_seq = np.load(fast_test_seq_path)
             else:
-                train_data = np.load(fast_train_path)[()]
+                train_data_stack = np.load(fast_train_path)[()]
                 test_data = np.load(fast_test_path)
         except:
 
@@ -238,7 +238,7 @@ class HW1Model:
         if seq:
             return train_seq_stack, test_seq
         else:
-            return train_data, test_data
+            return train_data_stack, test_data
 
     def get_data_mfcc(self, seq=True):
         return self._get_data(self.mfcc_dir, seq)
