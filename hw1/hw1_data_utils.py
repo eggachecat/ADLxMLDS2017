@@ -36,8 +36,8 @@ def to_timestep_seq(df):
     split_indices = np.cumsum(df.groupby("iid").ts.count())
 
     seq = np.split(df[df.columns[1:-2]].as_matrix(), split_indices)
-
-    return seq
+    idx = df["iid"].unique()
+    return seq[:-1], idx
 
 
 def edit_distance(S1, S2):
@@ -62,13 +62,11 @@ def edit_distance(S1, S2):
 def trim(phone_list, sli="L"):
     s = 0
     while phone_list[s] == sli:
-        if s < len(phone_list) - 1:
-            s += 1
+        s += 1
 
     e = len(phone_list) - 1
     while phone_list[e] == sli:
-        if e > 1:
-            e -= 1
+        e -= 1
 
     phone_list = phone_list[s:e + 1]
     return [k for k, g in itertools.groupby(phone_list)]
@@ -89,10 +87,10 @@ def _get_data(src_type, data_dir="./data", seq=True):
     try:
         if seq:
             train_seq_stack = np.load(fast_train_seq_path)[()]
-            test_seq_stack = np.load(fast_test_seq_path)
+            test_seq_stack = np.load(fast_test_seq_path)[()]
         else:
             train_data_stack = np.load(fast_train_path)[()]
-            test_data_stack = np.load(fast_test_path)
+            test_data_stack = np.load(fast_test_path)[()]
     except:
 
         phone_idx_map, phone_char_map = get_phone_idx_map(data_dir)
@@ -105,14 +103,20 @@ def _get_data(src_type, data_dir="./data", seq=True):
 
         train_data_stack = {"x": np.array(train_data[train_data.columns[1:-1]].as_matrix()),
                             "y": np.array(train_data[train_data.columns[-1]].as_matrix())}
+
         raw_test_data = pd.read_csv(test_path, header=None, delimiter=" ")
-        test_data_stack = raw_test_data[raw_test_data.columns[1:]].as_matrix()
+        test_data_stack = {"x": raw_test_data[raw_test_data.columns[1:]].as_matrix(),
+                           "y": raw_test_data[raw_test_data.columns[0]].as_matrix()}
 
         if seq:
-            raw_train_seq = to_timestep_seq(train_data)
-            test_seq_stack = to_timestep_seq(raw_test_data)
+            raw_train_seq, _ = to_timestep_seq(train_data)
+            raw_test_seq, idx = to_timestep_seq(raw_test_data)
+
+            test_seq_stack = {"x": np.array([seq for seq in raw_test_seq]),
+                              "y": test_data_stack["y"]}
+
             train_seq_stack = {"x": np.array([seq[:, :-1] for seq in raw_train_seq]),
-                               "y": np.array([seq[:, -1] for seq in raw_train_seq])}
+                               "y": idx}
 
         try:
             np.save(fast_train_path, train_data_stack)
@@ -147,18 +151,18 @@ def get_data_full(data_dir="./data", seq=True):
     try:
         if seq:
             train_seq_stack = np.load(fast_train_seq_path)[()]
-            test_seq = np.load(fast_test_seq_path)
+            test_seq_stack = np.load(fast_test_seq_path)[()]
         else:
-            train_data = np.load(fast_train_path)[()]
-            test_data = np.load(fast_test_path)
+            train_data_stack = np.load(fast_train_path)[()]
+            test_data_stack = np.load(fast_test_path)[()]
     except:
         mfcc_train, mfcc_test = get_data_mfcc(data_dir, seq=False)
         fbank_train, fbank_test = get_data_fbank(data_dir, seq=False)
 
         train_x = np.column_stack((mfcc_train["x"], fbank_train["x"]))
 
-        train_data = {"x": train_x, "y": mfcc_train["y"]}
-        test_data = np.column_stack((mfcc_test, fbank_test))
+        train_data_stack = {"x": train_x, "y": mfcc_train["y"]}
+        test_data_stack = {"x": np.column_stack((mfcc_test, fbank_test)), "y": mfcc_test["y"]}
 
         mfcc_train_seq, mfcc_test_seq = get_data_mfcc(data_dir, seq=True)
         fbank_train_seq, fbank_test_seq = get_data_fbank(data_dir, seq=True)
@@ -167,15 +171,17 @@ def get_data_full(data_dir="./data", seq=True):
                        range(len(mfcc_train_seq["x"]))]
 
         train_seq_stack = {"x": train_seq_x, "y": mfcc_train_seq["y"]}
-        test_seq = [np.column_stack((mfcc_test_seq[i], fbank_test_seq[i])) for i in range(len(mfcc_test_seq))]
+        test_seq_stack = {
+            "x": [np.column_stack((mfcc_test_seq[i], fbank_test_seq[i])) for i in range(len(mfcc_test_seq))],
+            "y": mfcc_test_seq["y"]}
 
-        np.save(fast_train_path, train_data)
-        np.save(fast_test_path, test_data)
+        np.save(fast_train_path, train_data_stack)
+        np.save(fast_test_path, test_data_stack)
 
         np.save(fast_train_seq_path, train_seq_stack)
-        np.save(fast_test_seq_path, test_seq)
+        np.save(fast_test_seq_path, test_seq_stack)
 
     if seq:
-        return train_seq_stack, test_seq
+        return train_seq_stack, test_seq_stack
     else:
-        return train_data, test_data
+        return train_data_stack, test_data_stack
