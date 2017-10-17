@@ -8,8 +8,8 @@ from sklearn.model_selection import train_test_split
 
 
 class HW1MLP(model_base.HW1Model):
-    def __init__(self, num_classes=48):
-        super(HW1MLP, self).__init__(data_type="matrix")
+    def __init__(self, num_classes=48, name="general"):
+        super(HW1MLP, self).__init__(data_type="matrix", name=name)
         self.num_classes = num_classes
 
     def make_model(self, dim_input):
@@ -36,11 +36,10 @@ class HW1MLP(model_base.HW1Model):
         return model
 
 
-def train_mlp_model():
-    seq = False
-    mlp = HW1MLP()
+def train_mlp_model(data_getter="get_data_mfcc"):
+    mlp = HW1MLP(name=data_getter.split("_")[-1])
 
-    train_data, _ = mlp.get_data_mfcc(seq=seq)
+    train_data, _ = getattr(mlp, data_getter)(False)
     x_data_, y_data_ = train_data["x"], train_data["y"]
     x_data = np.reshape(x_data_, x_data_.shape)
 

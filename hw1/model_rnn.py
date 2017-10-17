@@ -37,8 +37,8 @@ class HW1RNN(model_base.HW1Model):
 
 
 class HW1LSTM(model_base.HW1Model):
-    def __init__(self, data_dir="./data", num_classes=48):
-        super(HW1LSTM, self).__init__(data_dir=data_dir, model_type="lstm", data_type="seq")
+    def __init__(self, data_dir="./data", num_classes=48, name="general"):
+        super(HW1LSTM, self).__init__(data_dir=data_dir, model_type="lstm", data_type="seq", name=name)
         self.num_classes = num_classes
 
     def make_model(self, dim_input):
@@ -61,10 +61,10 @@ class HW1LSTM(model_base.HW1Model):
         return model
 
 
-def train_lstm_model(max_len=777):
-    mlp = HW1LSTM()
+def train_lstm_model(data_getter="get_data_mfcc", max_len=777):
+    mlp = HW1LSTM(name=data_getter.split("_")[-1])
 
-    train_data, _ = mlp.get_data_mfcc(True)
+    train_data, _ = getattr(mlp, data_getter)(True)
     x_data_, y_data_ = train_data["x"][:-1], train_data["y"][:-1]
     x_data = np.reshape(x_data_, x_data_.shape)
 
@@ -82,7 +82,7 @@ def train_lstm_model(max_len=777):
 
 
 def main():
-    train_lstm_model()
+    train_lstm_model(data_getter="get_data_fbank")
 
 
 if __name__ == '__main__':

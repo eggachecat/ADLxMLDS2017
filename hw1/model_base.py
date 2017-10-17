@@ -134,8 +134,9 @@ class Sequence_Edit_Distance_Callback(keras.callbacks.Callback):
 
 
 class HW1Model:
-    def __init__(self, data_dir="./data", model_type="mlp", data_type="seq"):
+    def __init__(self, data_dir="./data", model_type="mlp", data_type="seq", name="general"):
         self.model_type = model_type
+        self.name = name
         self.data_type = data_type
         self.data_dir = data_dir
         self.mfcc_dir = os.path.join(self.data_dir, "mfcc")
@@ -304,11 +305,11 @@ class HW1Model:
 
         exp_name = str(time.time())
 
-        model_dir = "./outputs/models/{mt}/model_{en}".format(mt=self.model_type, en=exp_name)
+        model_dir = "./outputs/models/{mt}/model_{name}_{en}".format(mt=self.model_type, name=self.name, en=exp_name)
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
 
-        log_dir = "./outputs/logs/{mt}/log_{en}".format(mt=self.model_type, en=exp_name)
+        log_dir = "./outputs/logs/{mt}/log_{name}_{en}".format(mt=self.model_type, name=self.name, en=exp_name)
 
         callbacks = [
             keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, batch_size=batch_size,
