@@ -17,15 +17,15 @@ class HW1MLP(model_base.HW1Model):
 
         model.add(Dense(100, input_dim=dim_input, activation='relu'))
         model.add(BatchNormalization())
-        model.add(Dropout(0.5))
+        model.add(Dropout(0.35))
 
         model.add(Dense(100, activation='relu'))
         model.add(BatchNormalization())
-        model.add(Dropout(0.5))
+        model.add(Dropout(0.35))
 
         model.add(Dense(100, activation='relu'))
         model.add(BatchNormalization())
-        model.add(Dropout(0.5))
+        model.add(Dropout(0.35))
 
         model.add(Dense(self.num_classes, activation='softmax'))
 

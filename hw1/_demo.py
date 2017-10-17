@@ -24,6 +24,8 @@ caa.b()
 
 
 
+
+
 A = np.array([
     np.array([[1, 1], [2, 2]]),
     np.array([[3, 3]]),

@@ -92,48 +92,20 @@ class Edit_Distance_Callback(keras.callbacks.Callback):
             # print(edit_distance(true_phone_list[i], pred_phone_list[i]))
             # print("-------------------------------------------------------------")
             distance_ctr += edit_distance(true_phone_list[i], pred_phone_list[i])
-        print("Avg edit distance", distance_ctr / len(y_seq))
-
-
-# def on_epoch_end(self, epoch, logs=None):
-#     idx_phone_map, phone_char_map = get_idx_phone_map()
-#     x_seq, y_seq = self.x_seq, self.y_seq
-#     true_phone_list = []
-#     for seq in y_seq:
-#         true_phone_list.append("".join(trim([phone_char_map[idx_phone_map[i]] for i in seq])))
-#
-#     pred_phone_list = []
-#
-#     for seq in x_seq:
-#         y_pred = self.model.predict_proba(seq)
-#         prediction = np.argmax(y_pred, axis=1).astype(int)
-#         phone_seq = trim([phone_char_map[idx_phone_map[i]] for i in prediction])
-#         pred_phone_list.append("".join(phone_seq))
-#
-#     distance_ctr = 0
-#     for i in range(len(y_seq)):
-#         print(len(true_phone_list[i]), "|||", true_phone_list[i])
-#         print(len(pred_phone_list[i]), "|||", pred_phone_list[i])
-#         print(edit_distance(true_phone_list[i], pred_phone_list[i]))
-#         print("-------------------------------------------------------------")
-#         distance_ctr += edit_distance(true_phone_list[i], pred_phone_list[i])
-#     print("===========================================")
-#     print("Avg edit distance", distance_ctr / len(y_seq))
-
-
-MAX_LEN = 777
+        print("\nAvg edit distance", distance_ctr / len(y_seq))
 
 
 class Sequence_Edit_Distance_Callback(keras.callbacks.Callback):
-    def __init__(self, x_seq, y_seq):
+    def __init__(self, x_seq, y_seq, max_len=777):
         self.x_seq = x_seq
         self.y_seq = y_seq
+        self.max_len = max_len
 
     def on_epoch_end(self, epoch, logs=None):
         idx_phone_map, phone_char_map = get_idx_phone_map()
 
         x_seq, y_seq = self.x_seq, self.y_seq
-        x_valid = sequence.pad_sequences(x_seq, dtype='float', maxlen=MAX_LEN)
+        x_valid = sequence.pad_sequences(x_seq, dtype='float', maxlen=self.max_len)
 
         y_pred = self.model.predict(x_valid)
         prediction = []
@@ -155,13 +127,10 @@ class Sequence_Edit_Distance_Callback(keras.callbacks.Callback):
 
         distance_ctr = 0
         for i in range(len(y_seq)):
-            print(len(true_phone_list[i]), "|||", true_phone_list[i])
-            print(len(pred_phone_list[i]), "|||", pred_phone_list[i])
-            print(edit_distance(true_phone_list[i], pred_phone_list[i]))
-            print("-------------------------------------------------------------")
             distance_ctr += edit_distance(true_phone_list[i], pred_phone_list[i])
         print("===========================================")
         print("Avg edit distance", distance_ctr / len(y_seq))
+        print("===========================================")
 
 
 class HW1Model:
@@ -273,7 +242,8 @@ class HW1Model:
             mfcc_train_seq, mfcc_test_seq = self.get_data_mfcc(seq=True)
             fbank_train_seq, fbank_test_seq = self.get_data_fbank(seq=True)
 
-            train_seq_x = [np.column_stack((mfcc_train_seq["x"][i], fbank_train_seq["x"][i])) for i in range(len(mfcc_train_seq["x"]))]
+            train_seq_x = [np.column_stack((mfcc_train_seq["x"][i], fbank_train_seq["x"][i])) for i in
+                           range(len(mfcc_train_seq["x"]))]
 
             train_seq_stack = {"x": train_seq_x, "y": mfcc_train_seq["y"]}
             test_seq = [np.column_stack((mfcc_test_seq[i], fbank_test_seq[i])) for i in range(len(mfcc_test_seq))]
@@ -296,7 +266,41 @@ class HW1Model:
         enc.fit(labels.reshape(-1, 1))
         return enc.transform(_labels.reshape(-1, 1)).toarray()
 
-    def train(self, model, x_train, y_train, x_valid, y_valid, x_seq, y_seq, batch_size):
+    @staticmethod
+    def seq_to_one_hot(_labels):
+        labels = np.array(list(range(48)), dtype=int)
+        enc = OneHotEncoder()
+        enc.fit(labels.reshape(-1, 1))
+        return [enc.transform(ts.reshape(-1, 1)).toarray() for ts in _labels]
+
+    def predict(self, model, x_data, index, exp_name, seq=True, max_len=777):
+        idx_phone_map, phone_char_map = get_idx_phone_map()
+
+        if seq:
+            x_test = sequence.pad_sequences(x_data, dtype='float', maxlen=777)
+            y_pred = model.predict_proba(x_test)
+            prediction = []
+            for i in range(y_pred.shape[0]):
+                prediction.append(y_pred[i][-x_data[i].shape[0]:])
+
+            pred_phone_list = []
+            for seq in prediction:
+                _seq = np.argmax(seq, axis=1)
+                __seq = "".join(trim([phone_char_map[idx_phone_map[i]] for i in _seq]))
+                pred_phone_list.append(__seq)
+        else:
+
+            pred_phone_list = []
+            for seq in x_data:
+                y_pred = model.predict_proba(seq)
+                prediction = np.argmax(y_pred, axis=1).astype(int)
+                phone_seq = trim([idx_phone_map[i] for i in prediction])
+                pred_phone_list.append("".join(phone_seq))
+
+        res = pd.DataFrame({'id': index, 'phone_sequence': pred_phone_list})
+        res.to_csv("./outputs/results/{mt}/{en}.csv".format(mt=self.model_type, en=exp_name), header=True, index=False)
+
+    def train(self, model, x_train, y_train, x_valid, y_valid, x_seq, y_seq, batch_size, max_len=777):
 
         exp_name = str(time.time())
 
@@ -309,7 +313,8 @@ class HW1Model:
         callbacks = [
             keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, batch_size=batch_size,
                                         write_graph=True,
-                                        write_grads=False, write_images=False, embeddings_freq=0, embeddings_layer_names=None,
+                                        write_grads=False, write_images=False, embeddings_freq=0,
+                                        embeddings_layer_names=None,
                                         embeddings_metadata=None),
             keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0, patience=5, verbose=0, mode='auto'),
             keras.callbacks.ModelCheckpoint(model_dir + "/weights.{epoch:02d}-{val_loss:.5f}.hdf5",
@@ -318,9 +323,8 @@ class HW1Model:
                                             save_best_only=False,
                                             save_weights_only=False, mode='auto', period=1)
         ]
-
         if self.data_type == "seq":
-            callbacks.append(Sequence_Edit_Distance_Callback(x_seq, y_seq))
+            callbacks.append(Sequence_Edit_Distance_Callback(x_seq, y_seq, max_len=max_len))
         else:
             callbacks.append(Edit_Distance_Callback(x_seq, y_seq))
 
@@ -331,7 +335,7 @@ class HW1Model:
 
         model.fit(x_train, y_train,
                   batch_size=batch_size,
-                  verbose=2,
+                  verbose=1,
                   epochs=100,
                   callbacks=callbacks,
                   validation_data=(x_valid, y_valid))
