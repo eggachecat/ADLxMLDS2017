@@ -395,7 +395,7 @@ def predict(exp_name, check_point_name):
     #
     print(len(pred_phone_list), len(index))
     res = pd.DataFrame({'id': index, 'phone_sequence': pred_phone_list})
-    res.to_csv("./outputs/results/lstm/{f}.csv".format(f=exp_name), header=True, index=False)
+    res.to_csv("./outputs/results/{f}.csv".format(f=exp_name), header=True, index=False)
 
 
 # train()

@@ -16,6 +16,20 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
 
+A = np.array([
+    np.array([[1, 1], [2, 2]]),
+    np.array([[3, 3]]),
+    np.array([[4, 4], [5, 5], [6, 6]])
+])
+B = np.array([
+    np.array([[-1, -1], [-2, -2]]),
+    np.array([[-3, -3]]),
+    np.array([[-4, -4], [5, 5], [6, 6]])
+])
+C = [np.column_stack((A[i], B[i])) for i in range(len(A))]
+print(len(C))
+exit()
+
 
 def translate_data(src, dst, delimiter=" "):
     df = pd.read_csv(src, header=None, delimiter=delimiter)
