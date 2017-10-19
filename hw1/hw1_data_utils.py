@@ -196,89 +196,92 @@ def get_data_full(data_dir="./data", seq=True):
 
 def get_train_idx(data_dir="./data"):
     try:
-        idx = np.load("./data/ans_idx.npy")
+        idx = np.load("./data/train_ans_idx.npy")
     except:
         df = pd.read_csv(data_dir + "/mfcc/train.ark", header=None, delimiter=" ")
         _uid, _sid, _fid = df[0].str.split('_').str
         df["iid"] = _uid + "_" + _sid
         idx = df["iid"].unique()
-        np.save("./data/ans_idx.npy", idx)
+        np.save("./data/train_ans_idx.npy", idx)
 
-    print(len(idx), idx)
     return idx
 
 
 if __name__ == '__main__':
-    # idx = get_train_idx()
-    # exit()
-    # print("get_data_mfcc(seq=False)")
-    # train_data_stack, test_data_stack = get_data_mfcc(seq=False)
-    # print(train_data_stack["x"].shape, train_data_stack["x"][0], train_data_stack["x"][-1])
-    # print("-------------")
-    # print(train_data_stack["y"].shape, train_data_stack["y"][0], train_data_stack["y"][-1])
-    # print("-------------")
-    # print(test_data_stack["x"].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
-    # print("-------------")
-    # print("=============")
-    #
-    # print("get_data_fbank(seq=False)")
-    # train_data_stack, test_data_stack = get_data_fbank(seq=False)
-    # print(train_data_stack["x"].shape, train_data_stack["x"][0], train_data_stack["x"][-1])
-    # print("-------------")
-    # print(train_data_stack["y"].shape, train_data_stack["y"][0], train_data_stack["y"][-1])
-    # print("-------------")
-    # print(test_data_stack["x"].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
-    # print("-------------")
-    # print("=============")
-    #
-    # print("get_data_full(seq=False)")
-    # train_data_stack, test_data_stack = get_data_full(seq=False)
-    # print(train_data_stack["x"].shape, train_data_stack["x"][0], train_data_stack["x"][-1])
-    # print("-------------")
-    # print(train_data_stack["y"].shape, train_data_stack["y"][0], train_data_stack["y"][-1])
-    # print("-------------")
-    # print(test_data_stack["x"].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
-    # print("-------------")
-    # print("=============")
-    #
+
+    print("get_train_idx")
+    idx = get_train_idx()
+    print(idx)
+    print("=============")
+
+    print("get_data_mfcc(seq=False)")
+    train_data_stack, test_data_stack = get_data_mfcc(seq=False)
+    print(train_data_stack["x"].shape, train_data_stack["x"][0], train_data_stack["x"][-1])
+    print("-------------")
+    print(train_data_stack["y"].shape, train_data_stack["y"][0], train_data_stack["y"][-1])
+    print("-------------")
+    print(test_data_stack["x"].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
+    print("-------------")
+    print("=============")
+
+    print("get_data_fbank(seq=False)")
+    train_data_stack, test_data_stack = get_data_fbank(seq=False)
+    print(train_data_stack["x"].shape, train_data_stack["x"][0], train_data_stack["x"][-1])
+    print("-------------")
+    print(train_data_stack["y"].shape, train_data_stack["y"][0], train_data_stack["y"][-1])
+    print("-------------")
+    print(test_data_stack["x"].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
+    print("-------------")
+    print("=============")
+
+    print("get_data_full(seq=False)")
+    train_data_stack, test_data_stack = get_data_full(seq=False)
+    print(train_data_stack["x"].shape, train_data_stack["x"][0], train_data_stack["x"][-1])
+    print("-------------")
+    print(train_data_stack["y"].shape, train_data_stack["y"][0], train_data_stack["y"][-1])
+    print("-------------")
+    print(test_data_stack["x"].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
+    print("-------------")
+    print("=============")
+
     print("get_data_mfcc(seq=True)")
     train_data_stack, test_data_stack = get_data_mfcc(seq=True)
-    # print(train_data_stack["x"].shape, len(train_data_stack["x"]), train_data_stack["x"][0].shape,
-    #       train_data_stack["x"][0], train_data_stack["x"][-1])
-    # print("-------------")
-    # print(train_data_stack["y"].shape, len(train_data_stack["y"]), train_data_stack["y"][0].shape,
-    #       train_data_stack["y"][0], train_data_stack["y"][-1])
-    # print("-------------")
+    print(train_data_stack["x"].shape, len(train_data_stack["x"]), train_data_stack["x"][0].shape,
+          train_data_stack["x"][0], train_data_stack["x"][-1])
+    print("-------------")
+    print(train_data_stack["y"].shape, len(train_data_stack["y"]), train_data_stack["y"][0].shape,
+          train_data_stack["y"][0], train_data_stack["y"][-1])
+    print("-------------")
     print(len(test_data_stack["x"]), test_data_stack["x"][0].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
     print("-------------")
     print(len(test_data_stack["y"]), test_data_stack["y"][0], test_data_stack["y"][-1])
     print("-------------")
     print("=============")
 
-    # print("get_data_fbank(seq=True)")
-    # train_data_stack, test_data_stack = get_data_fbank(seq=True)
-    # print(train_data_stack["x"].shape, len(train_data_stack["x"]), train_data_stack["x"][0].shape,
-    #       train_data_stack["x"][0], train_data_stack["x"][-1])
-    # print("-------------")
-    # print(train_data_stack["y"].shape, len(train_data_stack["y"]), train_data_stack["y"][0].shape,
-    #       train_data_stack["y"][0], train_data_stack["y"][-1])
-    # print("-------------")
-    # print(len(test_data_stack["x"]), test_data_stack["x"][0].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
-    # print("-------------")
-    # print(len(test_data_stack["y"]), test_data_stack["y"][0], test_data_stack["y"][-1])
-    # print("-------------")
-    # print("=============")
-    #
-    # print("get_data_full(seq=True)")
-    # train_data_stack, test_data_stack = get_data_full(seq=True)
-    # print(train_data_stack["x"].shape, len(train_data_stack["x"]), train_data_stack["x"][0].shape,
-    #       train_data_stack["x"][0], train_data_stack["x"][-1])
-    # print("-------------")
-    # print(train_data_stack["y"].shape, len(train_data_stack["y"]), train_data_stack["y"][0].shape,
-    #       train_data_stack["y"][0], train_data_stack["y"][-1])
-    # print("-------------")
-    # print(len(test_data_stack["x"]), test_data_stack["x"][0].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
-    # print("-------------")
-    # print(len(test_data_stack["y"]), test_data_stack["y"][0], test_data_stack["y"][-1])
-    # print("-------------")
-    # print("=============")
+    print("get_data_fbank(seq=True)")
+    train_data_stack, test_data_stack = get_data_fbank(seq=True)
+    print(train_data_stack["x"].shape, len(train_data_stack["x"]), train_data_stack["x"][0].shape,
+          train_data_stack["x"][0], train_data_stack["x"][-1])
+    print("-------------")
+    print(train_data_stack["y"].shape, len(train_data_stack["y"]), train_data_stack["y"][0].shape,
+          train_data_stack["y"][0], train_data_stack["y"][-1])
+    print("-------------")
+    print(len(test_data_stack["x"]), test_data_stack["x"][0].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
+    print("-------------")
+    print(len(test_data_stack["y"]), test_data_stack["y"][0], test_data_stack["y"][-1])
+    print("-------------")
+    print("=============")
+
+    print("get_data_full(seq=True)")
+    train_data_stack, test_data_stack = get_data_full(seq=True)
+    print(train_data_stack["x"].shape, len(train_data_stack["x"]), train_data_stack["x"][0].shape,
+          train_data_stack["x"][0], train_data_stack["x"][-1])
+    print("-------------")
+    print(train_data_stack["y"].shape, len(train_data_stack["y"]), train_data_stack["y"][0].shape,
+          train_data_stack["y"][0], train_data_stack["y"][-1])
+    print("-------------")
+    print(len(test_data_stack["x"]), test_data_stack["x"][0].shape, test_data_stack["x"][0], test_data_stack["x"][-1])
+    print("-------------")
+    print(len(test_data_stack["y"]), test_data_stack["y"][0], test_data_stack["y"][-1])
+    print("-------------")
+    print("=============")

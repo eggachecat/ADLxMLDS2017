@@ -2,88 +2,75 @@ import model_base
 import numpy as np
 import time
 from keras.models import Sequential
-from keras.layers import BatchNormalization, Dense, Dropout, Conv1D, MaxPooling1D, Flatten
+from keras.layers import BatchNormalization, Dense, Dropout, Masking, LSTM, TimeDistributed, Bidirectional
+from  keras.preprocessing import sequence
 import keras
 from sklearn.model_selection import train_test_split
+import os
 from hw1_data_utils import *
+import keras.backend as K
 
 
-class HW1CNNMLP(model_base.HW1Model):
-    def __init__(self, num_classes=48, name="general"):
-        super(HW1CNNMLP, self).__init__(data_type="matrix", name=name, model_type="cnnmlp")
+class HW1CNN(model_base.HW1Model):
+    def __init__(self, data_dir="./data", num_classes=48):
+        super(HW1CNN, self).__init__(data_dir=data_dir, model_type="rnn", data_type="seq")
         self.num_classes = num_classes
 
     def make_model(self, dim_input):
         model = Sequential()
+        model.add(Masking(mask_value=0., input_shape=dim_input))
 
-        model.add(Conv1D(filters=256, kernel_size=5,
-                         input_shape=(dim_input, 1),
-                         kernel_initializer='uniform',
-                         activation='relu'))
-
-        model.add(MaxPooling1D(pool_size=2))
-        model.add(Flatten())
-        model.add(BatchNormalization())
-
-        model.add(Dense(500, activation='relu'))
+        model.add(LSTM(256, dropout=0.2, recurrent_dropout=0.2, return_sequences=True))
+        model.add(TimeDistributed(Dense(128, activation='relu')))
         model.add(BatchNormalization())
         model.add(Dropout(0.35))
-
-        model.add(Dense(self.num_classes, activation='softmax'))
-
-        model.compile(loss='categorical_crossentropy',
-                      optimizer='adam',
-                      metrics=['accuracy'])
+        model.add(TimeDistributed(Dense(64, activation='relu')))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.35))
+        model.add(TimeDistributed(Dense(self.num_classes, activation='softmax')))
 
         return model
 
 
-def train_cnnmlp_model(data_dir="./data", data_name="mfcc", data_getter=get_data_mfcc):
-    mlp = HW1CNNMLP(name=data_name)
+def train_bilstm_model(rnn_model, data_dir="./data", src_type="mfcc", data_getter=get_data_mfcc, max_len=777,
+                       valid_rate=0.99):
+    print("Start training")
 
-    train_data, _ = data_getter(data_dir, False)
-    x_data_, y_data_ = train_data["x"], train_data["y"]
-    x_data = np.reshape(x_data_, x_data_.shape + (1,))
-    print(x_data.shape)
+    train_data, _ = data_getter(data_dir, True)
+    print("Getting data done")
 
-    y_data = mlp.to_one_hot(y_data_)
+    x_data, y_data = train_data["x"], HW1BiLSTM.seq_to_one_hot(train_data["y"])
 
-    x_train, x_valid, y_train, y_valid = train_test_split(x_data, y_data, test_size=0.1, random_state=42)
+    x_data = sequence.pad_sequences(x_data, maxlen=max_len)
+    y_data = sequence.pad_sequences(y_data, maxlen=max_len)
+    print("Padding data done")
 
-    model = mlp.make_model(x_data.shape[1])
+    n_split = int(valid_rate * (len(x_data)))
+    x_train, x_valid, y_train, y_valid = x_data[:n_split], x_data[n_split:], y_data[:n_split], y_data[n_split:]
 
-    seq, _ = data_getter(data_dir, True)
-    # for convolution purpose
-    x_seq = [np.reshape(s, s.shape + (1,)) for s in seq["x"][:-1]]
-    y_seq = seq["y"][:-1]
-    n_split = int(0.9 * len(y_seq))
-    mlp.train(model, x_train, y_train, x_valid, y_valid, x_seq[n_split:], y_seq[n_split:], batch_size=256)
+    model = rnn_model.make_model(x_data[0].shape)
+
+    rnn_model.train(model, x_train, y_train, x_valid, y_valid, batch_size=32, max_len=max_len,
+                    callback=model_base.Sequence_Edit_Distance_Callback(x_valid, y_valid))
 
 
-def predict_cnnmlp_model(data_dir="./data", data_name="mfcc", data_getter=get_data_mfcc):
-    mlp = HW1CNNMLP(name=data_name)
+def predict_rnn_model(model_path, target_dir, data_dir="./data", data_getter=get_data_mfcc, max_len=777,
+                      data_seq=None):
+    if data_seq is None:
+        _, data_seq = data_getter(data_dir, True)
 
-    train_data, _ = data_getter(data_dir, False)
-    x_data_, y_data_ = train_data["x"], train_data["y"]
-    x_data = np.reshape(x_data_, x_data_.shape + (1,))
-    print(x_data.shape)
+    model = model_base.HW1Model.load_model(model_path, )
+    model_base.HW1Model.seq_predict(model, data_seq, os.path.join(data_dir, target_dir), max_len=max_len)
 
-    y_data = mlp.to_one_hot(y_data_)
 
-    x_train, x_valid, y_train, y_valid = train_test_split(x_data, y_data, test_size=0.1, random_state=42)
-
-    model = mlp.make_model(x_data.shape[1])
-
-    seq, _ = data_getter(data_dir, True)
-    # for convolution purpose
-    x_seq = [np.reshape(s, s.shape + (1,)) for s in seq["x"][:-1]]
-    y_seq = seq["y"][:-1]
-    n_split = int(0.9 * len(y_seq))
-    mlp.train(model, x_train, y_train, x_valid, y_valid, x_seq[n_split:], y_seq[n_split:], batch_size=256)
+def validate_rnn_model(model_path, target_dir, data_dir="./data", data_getter=get_data_mfcc, max_len=777):
+    data_seq, _ = data_getter(data_dir, True)
+    predict_rnn_model(model_path, target_dir, data_dir=data_dir, data_getter=data_getter, data_seq=data_seq,
+                      max_len=max_len)
 
 
 def main():
-    train_cnnmlp_model()
+    pass
 
 
 if __name__ == '__main__':
