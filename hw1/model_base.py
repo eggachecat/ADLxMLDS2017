@@ -114,6 +114,9 @@ class Sequence_Edit_Distance_Callback(keras.callbacks.Callback):
             output.write("\n".join(self.history))
 
 
+def acc_with_sample_weight():
+    pass
+
 class HW1Model:
     def __init__(self, data_dir="./data", model_type="mlp", data_type="seq", data_src="general"):
         self.model_type = model_type
@@ -158,8 +161,10 @@ class HW1Model:
         idx_phone_map, phone_char_map = get_idx_phone_map()
 
         ctr = 0
+        rtn_prediction = []
         for seq in prediction:
             _seq = np.argmax(seq, axis=1)
+            rtn_prediction.append(_seq)
             __seq = "".join(trim([phone_char_map[idx_phone_map[i]] for i in _seq]))
             print(ctr, __seq)
             ctr += 1
@@ -170,13 +175,16 @@ class HW1Model:
         res = pd.DataFrame({'id': idx_seq, 'phone_sequence': pred_phone_list})
         res.to_csv(target_dir, header=True, index=False)
 
-    def train(self, model, x_train, y_train, x_valid, y_valid, batch_size, exp_name, max_len=777, callback=None):
+        return rtn_prediction
+
+    def train(self, model, x_train, y_train, x_valid, y_valid, batch_size, exp_name, max_len=777, callback=None,
+              sample_weight=None):
 
         model_dir = "./outputs/models/model_{name}_{en}".format(name=self.data_src, en=exp_name)
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
 
-        log_dir = "./outputs/logs//log_{name}_{en}".format(name=self.data_src, en=exp_name)
+        log_dir = "./outputs/logs/log_{name}_{en}".format(name=self.data_src, en=exp_name)
 
         callbacks = [
             keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, batch_size=batch_size,
@@ -195,10 +203,6 @@ class HW1Model:
         if callback is not None:
             callbacks.append(callback)
 
-        model.compile(loss='categorical_crossentropy',
-                      optimizer='adam',
-                      metrics=['accuracy'])
-
         model.save(model_dir + "/basic_model.h5")
 
         model.fit(x_train, y_train,
@@ -206,4 +210,5 @@ class HW1Model:
                   verbose=1,
                   epochs=1000,
                   callbacks=callbacks,
+                  sample_weight=sample_weight,
                   validation_data=(x_valid, y_valid))
