@@ -2,7 +2,7 @@ import model_base
 import numpy as np
 import time
 from keras.models import Sequential
-from keras.layers import BatchNormalization, Dense, Dropout, Masking, LSTM, TimeDistributed, Bidirectional, Conv1D
+from keras.layers import BatchNormalization, Dense, Dropout, Masking, LSTM, TimeDistributed, Bidirectional, GRU, Conv1D
 from  keras.preprocessing import sequence
 import keras
 from sklearn.model_selection import train_test_split
@@ -13,108 +13,201 @@ import argparse
 
 import os
 import tensorflow as tf
+from keras import optimizers
+import matplotlib.pyplot as plt
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+N_CLASS = 48
 
 
 class HW1CNN(model_base.HW1Model):
-    def __init__(self, data_dir="./data", num_classes=48, data_src="general"):
-        super(HW1CNN, self).__init__(data_dir=data_dir, model_type="bilstm", data_type="seq", data_src=data_src)
+    def __init__(self, data_dir="./data/", num_classes=N_CLASS, data_src="general"):
+        super(HW1CNN, self).__init__(data_dir=data_dir, model_type="gru_cnn", data_type="seq", data_src=data_src)
         self.num_classes = num_classes
 
     def make_model(self, dim_input):
-        print("Start building model...")
+        print("Start building model GRU-CNN...")
 
         model = Sequential()
-        # model.add(Masking(mask_value=0., input_shape=dim_input))
-
         model.add(Conv1D(
-            filters=64,
+            filters=1024,
             kernel_size=7,
             padding="causal",
-            activation='relu',
+            input_shape=dim_input
+        ))
+        model.add(Conv1D(
+            filters=1024,
+            kernel_size=7,
+            padding="causal",
             input_shape=dim_input
         ))
         model.add(BatchNormalization())
-        model.add(Conv1D(
-            filters=64,
-            kernel_size=7,
-            padding="causal",
-            activation='relu',
-            input_shape=dim_input
-        ))
-        model.add(BatchNormalization())
+        model.add(Bidirectional(GRU(512, dropout=0.2, return_sequences=True)))
 
-        model.add(Bidirectional(LSTM(256, dropout=0.1, return_sequences=True)))
-        model.add(Bidirectional(LSTM(256, dropout=0.1, return_sequences=True)))
-        # model.add(Bidirectional(LSTM(512, dropout=0.1, return_sequences=True)))
-        model.add(TimeDistributed(Dense(100, activation='relu')))
         model.add(BatchNormalization())
-        model.add(Dropout(0.3))
         model.add(TimeDistributed(Dense(self.num_classes, activation='softmax')))
+        # _adam = optimizers.Adam(lr=0.00013)
 
-        print("Building model Done")
         model.compile(loss='categorical_crossentropy',
-                      optimizer='adam',
-                      sample_weight_mode="temporal",
+                      optimizer="adam",
                       metrics=['accuracy'])
+        print(model.summary())
+        print("Building model Done")
         return model
 
 
-def train_rnn_model(rnn_model, data_dir="./data", data_getter=get_data_mfcc, max_len=777, valid_rate=0.99):
-    exp_name = str(time.time())
+def train_model(rnn_model, data_dir="./data/", data_getter=get_data_mfcc, data_src="mfcc", max_len=777,
+                valid_rate=0.9):
+    exp_name = "class_48" + str(time.time())
 
     print("Exp {e} Start training".format(e=exp_name))
 
     train_data, _ = data_getter(data_dir, True)
     print("Getting data done")
 
-    _x_data, _y_data = train_data["x"], HW1CNN.seq_to_one_hot(train_data["y"])
+    x_data, y_data = train_data["x"], model_base.HW1Model.seq_to_one_hot(train_data["y"])
 
-    x_data = sequence.pad_sequences(_x_data, maxlen=max_len)
-    y_data = sequence.pad_sequences(_y_data, maxlen=max_len)
+    x_data = sequence.pad_sequences(x_data, maxlen=max_len)
+    y_data = sequence.pad_sequences(y_data, maxlen=max_len)
+    print("Padding data done")
+
+    # n_split = int((1 - valid_rate) * (len(x_data)))
+    # x_train, x_valid, y_train, y_valid = x_data[n_split:], x_data[:n_split], y_data[n_split:], y_data[:n_split]
+    # n_data = len(x_data)
+    # train_idx = np.random.choice(n_data, n_data, replace=True)
+    # valid_idx = np.array(list(set(range(n_data)) - set(np.unique(train_idx))))
+    # valid_idx = valid_idx[:len(valid_idx) // 10]
+    # train_idx = np.unique(train_idx)
+    # x_train, x_valid, y_train, y_valid = x_data[train_idx], x_data[valid_idx], y_data[train_idx], y_data[valid_idx]
+    # train_test_split()
+    x_train, x_valid, y_train, y_valid = train_test_split(x_data, y_data, test_size=0.1, random_state=42)
+
+    model = rnn_model.make_model(x_data[0].shape)
+    rnn_model.train(model, x_train, y_train, x_valid, y_valid, batch_size=64, exp_name=exp_name,
+                    max_len=max_len, data_src=data_src,
+                    callback=model_base.Sequence_Edit_Distance_Callback(x_valid, y_valid, data_dir=data_dir,
+                                                                        max_len=max_len,
+                                                                        exp_name=exp_name))
+
+
+def predict_model(model_path, target_path, data_dir="./data/", data_getter=get_data_mfcc, max_len=777,
+                  data_seq=None):
+    if data_seq is None:
+        _, data_seq = data_getter(data_dir, True)
+    model = model_base.HW1Model.load_model(model_path, )
+    return model_base.HW1Model.seq_predict(model, data_seq, target_path, max_len=max_len)
+
+
+from os import listdir
+from os.path import isfile, join
+
+
+def predict_multi_rnn_model(model_dir, target_path, data_dir="./data/", data_getter=get_data_mfcc, max_len=777,
+                            data_seq=None):
+    model_path_list = [join(model_dir, f) for f in listdir(model_dir) if isfile(join(model_dir, f))]
+    print(model_path_list)
+    model_list = []
+    if data_seq is None:
+        _, data_seq = data_getter(data_dir, True)
+    for model_path in model_path_list:
+        model = model_base.HW1Model.load_model(model_path)
+        model_list.append(model)
+    return model_base.HW1Model.multi_seq_predict(model_list, data_seq, target_path, max_len=max_len)
+
+
+def validate_model(model_path, target_path, data_dir="./data/", data_getter=get_data_mfcc, max_len=777):
+    data_seq, _ = data_getter(data_dir, True)
+    n_data = 37
+    y_true = data_seq["y"][-n_data:]
+    x_true = data_seq["x"][-n_data:]
+    y_pred = predict_model(model_path, target_path, data_dir=data_dir, data_getter=data_getter, data_seq={
+        "x": x_true,
+        "y": y_true
+
+    }, max_len=max_len)
+    ctr_dict = dict()
+    for i in range(N_CLASS):
+        ctr_dict[i] = {
+            "freq": 0,
+            "true": 0
+        }
+    for idx in range(len(y_pred)):
+        y_pred_seq = y_pred[idx]
+        y_true_seq = y_true[idx]
+        _seq = np.vstack([y_pred_seq.flatten(), 1 * (y_pred_seq.flatten() == y_true_seq.flatten())])
+
+        for i in range(N_CLASS):
+            idx = _seq[0, :] == i
+            ctr_dict[i]["true"] += np.sum(_seq[1, idx])
+
+        ctr = np.bincount(y_pred_seq.flatten())
+
+        for i, val in enumerate(ctr):
+            ctr_dict[i]["freq"] += val
+    print(ctr_dict)
+
+    np.save(str(time.time()) + ".npy", ctr_dict)
+
+    x_label = list(range(N_CLASS))
+    y_data = []
+    for x in x_label:
+        y_data.append(ctr_dict[x]["true"] / ctr_dict[x]["freq"])
+
+    plt.bar(x_label, y_data)
+    plt.xticks(x_label, tuple(x_label))
+    plt.show()
+
+
+def continue_train_model(model_path, data_dir="./data/", data_getter=get_data_mfcc, max_len=777, valid_rate=0.99,
+                         data_src="mfcc", lr=0.00013):
+    train_data, _ = data_getter(data_dir, True)
+    exp_name = str(time.time())
+    print(data_getter)
+    print("Exp {e} Start training".format(e=exp_name))
+
+    train_data, _ = data_getter(data_dir, True)
+    print("Getting data done")
+
+    x_data, y_data = train_data["x"], model_base.HW1Model.seq_to_one_hot(train_data["y"])
+
+    x_data = sequence.pad_sequences(x_data, maxlen=max_len)
+    y_data = sequence.pad_sequences(y_data, maxlen=max_len)
     print("Padding data done")
 
     n_split = int(valid_rate * (len(x_data)))
     x_train, x_valid, y_train, y_valid = x_data[:n_split], x_data[n_split:], y_data[:n_split], y_data[n_split:]
 
-    sample_weight = np.zeros((n_split, max_len), dtype=np.float)
-    for i in range(n_split):
-        sample_weight[i, -len(_x_data[i])] = 1.
-
-    model = rnn_model.make_model(x_data[0].shape)
-    rnn_model.train(model, x_train, y_train, x_valid, y_valid, batch_size=32, exp_name=str(time.time()),
-                    max_len=max_len,
-                    callback=model_base.Sequence_Edit_Distance_Callback(x_valid, y_valid), sample_weight=sample_weight)
-
-
-def predict_rnn_model(model_path, target_path, data_dir="./data", data_getter=get_data_mfcc, max_len=777,
-                      data_seq=None):
-    if data_seq is None:
-        _, data_seq = data_getter(data_dir, True)
-
-    model = model_base.HW1Model.load_model(model_path, )
-    model_base.HW1Model.seq_predict(model, data_seq, os.path.join(data_dir, target_path), max_len=max_len)
-
-
-def validate_rnn_model(model_path, target_path, data_dir="./data", data_getter=get_data_mfcc, max_len=777):
-    data_seq, _ = data_getter(data_dir, True)
-    predict_rnn_model(model_path, target_path, data_dir=data_dir, data_getter=data_getter, data_seq=data_seq,
-                      max_len=max_len)
+    model = model_base.HW1Model.load_model(model_path)
+    print(model.summary())
+    adam = optimizers.adam(lr=lr)
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=adam,
+                  metrics=['accuracy'])
+    model_base.HW1Model.train(model, x_train, y_train, x_valid, y_valid, batch_size=64, exp_name=exp_name,
+                              max_len=max_len, data_src=data_src,
+                              callback=model_base.Sequence_Edit_Distance_Callback(x_valid, y_valid))
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-a', dest="action", help='action: 0-> train; 1->predict; default:0', default=0, type=int)
-    parser.add_argument('-dp', dest="data_path", help='the root dir of data', default="./data")
-    parser.add_argument('-ds', dest="data_src", help='data_src: 0->mfcc; 1->fbank; 2->full; default:0', default=0,
+    parser.add_argument('-a', dest="action",
+                        help='action: \n\t0-> train; \n\t1->predict; \n\t2->valid; \n\t3->continue; \n\t4->ensemble;  \n\tdefault:0',
+                        default=0,
                         type=int)
+    parser.add_argument('-dp', dest="data_path", help='the root dir of data', default="./data/")
+    parser.add_argument('-ds', dest="data_src", help='data_src: 0->mfcc; \n\t1->fbank; \n\t2->full; \n\tdefault:0',
+                        default=0,
+                        type=int)
+
     parser.add_argument('-mp', dest="model_path",
-                        help='where the model should be loaded; only is needed when action=1', default=None)
+                        help='where the model should be loaded; \nonly is needed when action=1 or action = 3',
+                        default=None)
     parser.add_argument('-tp', dest="target_path",
-                        help='where the prediction should be saved;only is needed when action=1', default=None)
+                        help='where the prediction should be saved;\nonly is needed when action=1', default=None)
     parser.add_argument('-ml', dest="max_len",
                         help='max_len parameter in pad_sequence', default=777, type=int)
+    parser.add_argument('-lr', dest="learning_rate",
+                        help='max_len parameter in pad_sequence', default=0.0001, type=float)
 
     opt = parser.parse_args()
 
@@ -123,12 +216,27 @@ def main():
 
     if opt.action == 0:
         model = HW1CNN(data_dir=opt.data_path, data_src=data_src_map[opt.data_src])
-        train_rnn_model(model, data_dir=opt.data_path, data_getter=data_getter_map[opt.data_src], max_len=opt.max_len)
-    else:
+        train_model(model, data_dir=opt.data_path, data_getter=data_getter_map[opt.data_src], max_len=opt.max_len)
+    elif opt.action == 1:
         if opt.model_path is None or opt.target_path is None:
             print("Predicting need model path and target path")
-        predict_rnn_model(opt.model_path, opt.target_path, opt.data_path, data_getter=data_getter_map[opt.data_src],
-                          max_len=opt.max_len)
+        predict_model(opt.model_path, opt.target_path, opt.data_path, data_getter=data_getter_map[opt.data_src],
+                      max_len=opt.max_len)
+    elif opt.action == 2:
+        if opt.model_path is None or opt.target_path is None:
+            print("Validating need model path and target path")
+        validate_model(opt.model_path, opt.target_path, opt.data_path, data_getter=data_getter_map[opt.data_src],
+                       max_len=opt.max_len)
+    elif opt.action == 3:
+        if opt.model_path is None or opt.target_path is None:
+            print("Continuing training need model path")
+        continue_train_model(opt.model_path, data_src=opt.data_path,
+                             data_getter=data_getter_map[opt.data_src],
+                             max_len=opt.max_len, lr=opt.learning_rate)
+    elif opt.action == 4:
+        predict_multi_rnn_model(opt.model_path, opt.target_path, opt.data_path,
+                                data_getter=data_getter_map[opt.data_src],
+                                max_len=opt.max_len)
 
 
 if __name__ == '__main__':

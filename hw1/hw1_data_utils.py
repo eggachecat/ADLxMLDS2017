@@ -9,7 +9,7 @@ import itertools
 from keras.preprocessing import sequence
 
 
-def get_phone_idx_map(data_dir="./data"):
+def get_phone_idx_map(data_dir="./data/"):
     _48phone_idx_map = pd.read_csv(os.path.join(data_dir, "48phone_char.map"), header=None, delimiter="\t")
     _48phone_idx_map.set_index(0, drop=True, inplace=True)
     phone_idx_map = _48phone_idx_map[[1]].to_dict()[1]
@@ -18,7 +18,7 @@ def get_phone_idx_map(data_dir="./data"):
     return phone_idx_map, phone_char_map
 
 
-def get_idx_phone_map(data_dir="./data"):
+def get_idx_phone_map(data_dir="./data/"):
     _48_39map = pd.read_csv(os.path.join(data_dir, "phones/48_39.map"), header=None, delimiter="\t")
     _48_39map.set_index(0, drop=True, inplace=True)
     _48_39map = _48_39map[[1]].to_dict()[1]
@@ -29,7 +29,7 @@ def get_idx_phone_map(data_dir="./data"):
     return idx_phone_map, phone_char_map
 
 
-def get_raw_label(data_dir="./data"):
+def get_raw_label(data_dir="./data/"):
     label_dir = os.path.join(data_dir, "label")
     label_path = os.path.join(label_dir, "train.lab")
     return pd.read_csv(label_path, header=None, delimiter=",")
@@ -65,8 +65,44 @@ def edit_distance(S1, S2):
     return fdn[x, y]
 
 
-def trim(phone_list, sli="L"):
+def super_trim(_str, body_thres=2, side_thres=5):
+    _str_stat = [(k, sum(1 for _ in g)) for k, g in itertools.groupby(_str)]
+    n_data = len(_str_stat)
+    res_list = [_str_stat[0]]
+    i = 1
+    while i < n_data - 1:
+
+        head = res_list.pop()
+        body = _str_stat[i]
+        tail = _str_stat[i + 1]
+
+        if head[0] == tail[0]:
+            if body[1] <= body_thres and (head[1] >= side_thres or tail[1] >= side_thres):
+                res_list.extend([head, tail])
+            else:
+                res_list.extend([head, body, tail])
+        else:
+            if body[1] <= body_thres and (head[1] >= side_thres or tail[1] >= side_thres):
+                res_list.extend([head, tail])
+            else:
+                res_list.extend([head, body, tail])
+
+        i += 2
+
+    # print(i, n_data)
+    if i == n_data - 1:
+        res_list.append(_str_stat[-1])
+
+    # print(res_list)
+    return list("".join([res[1] * res[0] for res in res_list]))
+
+
+def trim(phone_list, sli="L", use_super_trim=None):
     s = 0
+    if use_super_trim is not None:
+        for i in range(use_super_trim):
+            phone_list = super_trim(phone_list)
+
     while phone_list[s] == sli:
         s += 1
 
@@ -78,7 +114,7 @@ def trim(phone_list, sli="L"):
     return [k for k, g in itertools.groupby(phone_list)]
 
 
-def _get_data(src_type, data_dir="./data", seq=True):
+def _get_data(src_type, data_dir="./data/", seq=True):
     src_dir = os.path.join(data_dir, src_type)
 
     train_path = os.path.join(src_dir, "train.ark")
@@ -138,15 +174,15 @@ def _get_data(src_type, data_dir="./data", seq=True):
         return train_data_stack, test_data_stack
 
 
-def get_data_mfcc(data_dir="./data", seq=True):
+def get_data_mfcc(data_dir="./data/", seq=True):
     return _get_data("mfcc", data_dir, seq)
 
 
-def get_data_fbank(data_dir="./data", seq=True):
+def get_data_fbank(data_dir="./data/", seq=True):
     return _get_data("fbank", data_dir, seq)
 
 
-def get_data_full(data_dir="./data", seq=True):
+def get_data_full(data_dir="./data/", seq=True):
     fast_train_path = os.path.join(data_dir, "full_train.npy")
     fast_test_path = os.path.join(data_dir, "full_test.npy")
 
@@ -194,21 +230,20 @@ def get_data_full(data_dir="./data", seq=True):
         return train_data_stack, test_data_stack
 
 
-def get_train_idx(data_dir="./data"):
+def get_train_idx(data_dir="./data/"):
     try:
-        idx = np.load("./data/train_ans_idx.npy")
+        idx = np.load("./data//train_ans_idx.npy")
     except:
         df = pd.read_csv(data_dir + "/mfcc/train.ark", header=None, delimiter=" ")
         _uid, _sid, _fid = df[0].str.split('_').str
         df["iid"] = _uid + "_" + _sid
         idx = df["iid"].unique()
-        np.save("./data/train_ans_idx.npy", idx)
+        np.save("./data//train_ans_idx.npy", idx)
 
     return idx
 
 
 if __name__ == '__main__':
-
     print("get_train_idx")
     idx = get_train_idx()
     print(idx)
