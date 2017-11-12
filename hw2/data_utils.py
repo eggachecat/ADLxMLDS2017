@@ -18,9 +18,9 @@ class DataUtils:
 
     @staticmethod
     def format_caption(caption):
-        caption = caption.replace(",", " ").replace(".", "").replace(":", " ").replace("!", " ") \
-            .replace("'s", " is").replace("'", " ").replace("&", " ").replace("(", " ") \
-            .replace(")", " ").replace("[", " ").replace("]", " ").replace("-", " ").replace("\"", " ")
+        caption = caption.replace(",", "").replace(".", "").replace(":", "").replace("!", "").replace("  ", "").replace(
+            "'s", "is").replace("'", "").replace("&", "").replace("(", "").replace(")", "").replace("[", "").replace(
+            "]", "").replace("\"", "")
         return '<BOS> ' + caption.strip().lower() + ' <EOS>'
 
     @staticmethod
@@ -49,7 +49,7 @@ class DataUtils:
 
                 all_words_set = list(all_words_set)
                 all_words_set = [word for word in all_words_set if
-                                 (not bool(re.search(r'\d', word)) and (word is not '') and (word is not ' '))]
+                                 (not bool(re.search(r'\d', word)) and (word is not ''))]
                 all_words_set.sort()
                 w2i = dict([(word, i) for i, word in enumerate(all_words_set)])
                 try:
@@ -134,7 +134,8 @@ class DataUtils:
         indices_pool = [(i * batch_size, (i + 1) * batch_size) for i in range(n_batch)]
 
         while True:
-            for index in range(n_batch):
+            indices_order = np.random.permutation(n_batch)
+            for index in indices_order:
                 split_pair = indices_pool[index]
                 s, e = split_pair[0], split_pair[1]
                 yield source_dataset[s:e], target_dataset[s:e], target_dataset_mask[s:e]
