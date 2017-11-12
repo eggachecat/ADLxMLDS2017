@@ -1,4 +1,4 @@
-from models import *
+from seq2seq_models import *
 import tensorflow as tf
 from data_utils import *
 import pandas as pd
@@ -130,7 +130,7 @@ if __name__ == '__main__':
     parser.add_argument('-mp', dest="model_path", help='path of model you want to infer with')
     parser.add_argument('-op', dest="output_path", help='path of output')
 
-    parser.add_argument('-a', dest="action", help='action: \n\t0-> train; \n\t1->infer; ', default=0, type=int)
+    parser.add_argument('-a', dest="action", help='action: \n\t0-> train; \n\t1->infer; n\t2->infer; ', default=0, type=int)
 
     opt = parser.parse_args()
 
