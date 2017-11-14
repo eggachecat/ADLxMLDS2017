@@ -3,24 +3,25 @@ import tensorflow as tf
 from data_utils import *
 import pandas as pd
 
-VOCAB_SIZE = 6100
+VOCAB_SIZE = 6147
 MAX_ENCODER_TIME = 80
 MAX_DECODER_TIME = 42
 N_FEAT = 4096
 SAMPLE_LENGTH = 1450
 
-batch_size = 16
+batch_size = 64
 embedding_size = 1000
-hidden_units = 100
-epoch = 1000
-learning_rate = 0.0001
+hidden_units = 256
+n_epoch = 1000
+learning_rate = 0.1
 
 
-def train(root_data_path):
+def train(root_data_path, verbose=True):
     du = DataUtils(root_data_path)
-
     batch_generator = du.batch_generator(batch_size)
-    encoder_inputs, decoder_inputs, decoder_mask = batch_generator.__next__()
+    if verbose:
+        id_caption_obj = du.get_id_caption_obj("training_label.json")
+        w2i, iw2 = du.get_dictionary(id_caption_obj)
 
     machine = BasicModelTrain(batch_size=batch_size, n_feat=N_FEAT, vocab_size=VOCAB_SIZE,
                               embedding_size=embedding_size,
@@ -34,10 +35,23 @@ def train(root_data_path):
     checkpoints_path = "./outputs/model.ckpt"
     saver = tf.train.Saver()
 
-    for i in range(epoch):
+    for i in range(n_epoch):
+        print("==========={}============".format(i))
         for j in range(SAMPLE_LENGTH // batch_size):
-            outputs, train_loss, _ = sess.run(
-                [machine.outputs, machine.train_loss, machine.update_step],
+            encoder_inputs, decoder_inputs, decoder_mask = batch_generator.__next__()
+
+            # print(encoder_inputs)
+            # print("--------------------------------------------------------------------")
+            # print(np.array([d.shape[0] for d in decoder_inputs]))
+            # print("--------------------------------------------------------------------")
+            # print(decoder_inputs)
+            # print("--------------------------------------------------------------------")
+            # print(np.roll(decoder_inputs, -1))
+            # print("--------------------------------------------------------------------")
+            # print(decoder_mask)
+            # exit()
+            outputs, train_loss, translations, _ = sess.run(
+                [machine.outputs, machine.train_loss, machine.translations, machine.update_step],
                 feed_dict={
                     machine.encoder_inputs: encoder_inputs,
                     machine.decoder_lengths: np.array([d.shape[0] for d in decoder_inputs]),
@@ -46,8 +60,15 @@ def train(root_data_path):
                     machine.decoder_mask: decoder_mask
                 })
             print("EPOCH {} batch {}:loss: {}".format(i, j, train_loss))
+            if verbose and j == 0:
+                true_sentence_list = [" ".join([iw2[tr] for tr in translation if tr != 1 and tr != 0]) for translation
+                                      in decoder_inputs[:10]]
+                pred_sentence_list = [" ".join([iw2[tr] for tr in translation if tr != 1 and tr != 0]) for translation
+                                      in translations[:10]]
 
-            # exit()
+                for k in range(10):
+                    print("[[{}]] ->[[{}]]\n".format(true_sentence_list[k], pred_sentence_list[k]))
+        print("========================")
         saver.save(sess, checkpoints_path)
 
     summary_writer = tf.summary.FileWriter('./logs', sess.graph)
@@ -72,7 +93,7 @@ def infer(root_data_path, checkpoints_path, output_path):
     saver = tf.train.Saver()
     saver.restore(sess, checkpoints_path)
 
-    for i in range(epoch):
+    for i in range(n_epoch):
         for j in range(SAMPLE_LENGTH // batch_size):
             outputs, translations = sess.run(
                 [machine.outputs, machine.translations],
@@ -130,10 +151,13 @@ if __name__ == '__main__':
     parser.add_argument('-mp', dest="model_path", help='path of model you want to infer with')
     parser.add_argument('-op', dest="output_path", help='path of output')
 
-    parser.add_argument('-a', dest="action", help='action: \n\t0-> train; \n\t1->infer; n\t2->infer; ', default=0, type=int)
+    parser.add_argument('-a', dest="action", help='action: \n\t0-> train; \n\t1->infer; n\t2->infer; ', default=0,
+                        type=int)
 
     opt = parser.parse_args()
 
+    if opt.action == -1:
+        debug_train(root_data_path=opt.data_path)
     if opt.action == 0:
         train(root_data_path=opt.data_path)
     if opt.action == 1:

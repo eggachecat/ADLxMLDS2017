@@ -111,7 +111,7 @@ class DataUtils:
 
         return source_dataset
 
-    def batch_generator(self, batch_size):
+    def batch_generator(self, batch_size, use_random=False):
         id_label_obj = self.get_id_label_obj("training_label.json")
 
         # make sure always keys in the same order
@@ -134,7 +134,10 @@ class DataUtils:
         indices_pool = [(i * batch_size, (i + 1) * batch_size) for i in range(n_batch)]
 
         while True:
-            indices_order = np.random.permutation(n_batch)
+            if use_random:
+                indices_order = np.random.permutation(n_batch)
+            else:
+                indices_order = range(n_batch)
             for index in indices_order:
                 split_pair = indices_pool[index]
                 s, e = split_pair[0], split_pair[1]
