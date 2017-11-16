@@ -85,7 +85,7 @@ class BasicModel_Train:
         self.merged_summary = tf.summary.merge_all()
 
 
-class BasicModel_Inference:
+class BasicModel_Infer:
     def __init__(self, batch_size, n_feat, vocab_size, embedding_size, max_encoder_time, max_decoder_time,
                  hidden_units, max_gradient_norm=100, learning_rate=0.0001, bos_id=0, eos_id=1,
                  maximum_iterations=100):

@@ -132,6 +132,9 @@ class DataUtils:
         ordered_id_list.sort()
         max_len = 44
         i = 0
+
+        source_dataset = self.load_source_dataset(ordered_id_list)
+
         while True:
             target_dataset = np.array([id_label_obj[id][i % len(id_label_obj[id])] for id in ordered_id_list])
 
@@ -139,7 +142,6 @@ class DataUtils:
                 [np.concatenate((np.ones(len(t)), np.zeros(max_len - len(t)))) for t in target_dataset])
             target_dataset = np.array(
                 [np.pad(t, (0, max_len - len(t)), "edge") for t in target_dataset])
-            source_dataset = self.load_source_dataset(ordered_id_list)
 
             assert target_dataset.shape[0] == source_dataset.shape[0]
 

@@ -13,12 +13,13 @@ SAMPLE_LENGTH = 1450
 
 batch_size = 50
 embedding_size = 1000
-hidden_units = 256
+hidden_units = 128
 n_epoch = 1000
 learning_rate = 0.1
+dropout = 0.8
 
 
-def train(root_data_path, checkpoints_path, verbose=True, continue_train=False):
+def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_train=False):
     if checkpoints_path is None:
         checkpoints_path = "./outputs/model.ckpt"
 
@@ -28,11 +29,11 @@ def train(root_data_path, checkpoints_path, verbose=True, continue_train=False):
         id_caption_obj = du.get_id_caption_obj("training_label.json")
         w2i, iw2 = du.get_dictionary(id_caption_obj)
 
-    machine = BasicModel_Train(batch_size=batch_size, n_feat=N_FEAT, vocab_size=VOCAB_SIZE,
-                               embedding_size=embedding_size,
-                               max_encoder_time=MAX_ENCODER_TIME,
-                               max_decoder_time=MAX_DECODER_TIME,
-                               hidden_units=hidden_units, learning_rate=learning_rate)
+    machine = train_model(batch_size=batch_size, n_feat=N_FEAT, vocab_size=VOCAB_SIZE,
+                          embedding_size=embedding_size,
+                          max_encoder_time=MAX_ENCODER_TIME,
+                          max_decoder_time=MAX_DECODER_TIME,
+                          hidden_units=hidden_units, learning_rate=learning_rate, dropout=dropout)
 
     sess = tf.Session()
     saver = tf.train.Saver()
@@ -82,7 +83,7 @@ def train(root_data_path, checkpoints_path, verbose=True, continue_train=False):
     summary_writer.close()
 
 
-def infer(root_data_path, checkpoints_path, output_path, valid=False):
+def infer(root_data_path, checkpoints_path, output_path, infer_model, valid=False):
     du = DataUtils(root_data_path)
 
     id_caption_obj = du.get_id_caption_obj("training_label.json")
@@ -95,11 +96,11 @@ def infer(root_data_path, checkpoints_path, output_path, valid=False):
         missions = du.get_test_labels()
         missions_inputs = [du.load_feat(mission, "test") for mission in missions]
 
-    machine = BasicModel_Inference(batch_size=1, n_feat=N_FEAT, vocab_size=VOCAB_SIZE,
-                                   embedding_size=embedding_size,
-                                   max_encoder_time=MAX_ENCODER_TIME,
-                                   max_decoder_time=MAX_DECODER_TIME,
-                                   hidden_units=hidden_units)
+    machine = infer_model(batch_size=1, n_feat=N_FEAT, vocab_size=VOCAB_SIZE,
+                          embedding_size=embedding_size,
+                          max_encoder_time=MAX_ENCODER_TIME,
+                          max_decoder_time=MAX_DECODER_TIME,
+                          hidden_units=hidden_units)
 
     sess = tf.Session()
     # sess.run(tf.global_variables_initializer())
@@ -134,23 +135,33 @@ if __name__ == '__main__':
     parser.add_argument('-dp', dest="data_path", help='the root dir of data', default="./data/")
     parser.add_argument('-mp', dest="model_path", help='path of model you want to infer with', default=None)
     parser.add_argument('-op', dest="output_path", help='path of output')
+    parser.add_argument('-mt', dest="model_type", help='0-> basic; 1->attention; ', default=0, type=int)
 
     parser.add_argument('-a', dest="action", help='action: \n\t0-> train; \n\t1->infer; n\t2->infer; ', default=0,
                         type=int)
 
     opt = parser.parse_args()
 
+    MODEL_KEYS = ["basic", "attention"]
+    model_obj = MODEL_MAP[MODEL_KEYS[opt.model_type]]
+
     if opt.action == -2:
         debug_train(root_data_path=opt.data_path)
 
     if opt.action == 0:
-        train(root_data_path=opt.data_path, checkpoints_path=opt.model_path)
+        train(root_data_path=opt.data_path, checkpoints_path=opt.model_path, train_model=model_obj["train"])
     if opt.action == 1:
-        infer(root_data_path=opt.data_path, checkpoints_path=opt.model_path, output_path=opt.output_path)
+        infer(root_data_path=opt.data_path, checkpoints_path=opt.model_path, output_path=opt.output_path,
+              infer_model=model_obj["infer"])
     if opt.action == 2:
-        train(root_data_path=opt.data_path, checkpoints_path=opt.model_path, continue_train=True)
+        train(root_data_path=opt.data_path, checkpoints_path=opt.model_path, continue_train=True,
+              train_model=model_obj["train"])
     if opt.action == 3:
-        infer(root_data_path=opt.data_path, checkpoints_path=opt.model_path, output_path=opt.output_path, valid=True)
+        infer(root_data_path=opt.data_path, checkpoints_path=opt.model_path, output_path=opt.output_path, valid=True,
+              infer_model=model_obj["infer"])
+
+
+# python main.py -a 0 -dp d:/workstation/adl/data/hw2/ -mp ./outputs/attention/model.ckpt -mt 1
 
 
 #
