@@ -18,9 +18,9 @@ class DataUtils:
 
     @staticmethod
     def format_caption(caption):
-        caption = caption.replace(",", "").replace(".", "").replace(":", "").replace("!", "").replace("  ", "").replace(
-            "'s", "is").replace("'", "").replace("&", "").replace("(", "").replace(")", "").replace("[", "").replace(
-            "]", "").replace("\"", "")
+        caption = caption.replace(",", " ").replace(".", " ").replace(":", " ").replace("!", " ").replace("  ", " ") \
+            .replace("'s", " is").replace("'", " ").replace("&", " ").replace("(", " ").replace(")", " ") \
+            .replace("-", " ").replace("[", " ").replace("]", " ").replace("\"", " ")
         return '<BOS> ' + caption.strip().lower() + ' <EOS>'
 
     @staticmethod
@@ -29,7 +29,7 @@ class DataUtils:
         return words
 
     @staticmethod
-    def get_dictionary(id_caption_obj=None):
+    def get_dictionary(id_caption_obj=None, min_freq=2):
         if id_caption_obj is None:
             try:
                 w2i = json.load(open("./data/w2i_dict.json"))
@@ -40,18 +40,22 @@ class DataUtils:
             try:
                 w2i = json.load(open("./data/w2i_dict.json"))
             except FileNotFoundError:
-                all_words_set = {"<BOS>", "<EOS>", "<UNK>", "<PAD>"}
-                for _id in id_caption_obj:
-                    words_set = set()
-                    for words in id_caption_obj[_id]:
-                        words_set = words_set | set(words)
-                    all_words_set = all_words_set | words_set
 
-                all_words_set = list(all_words_set)
-                all_words_set = [word for word in all_words_set if
-                                 (not bool(re.search(r'\d', word)) and (word is not ''))]
-                all_words_set.sort()
-                w2i = dict([(word, i) for i, word in enumerate(all_words_set)])
+                word_ocean = []
+                for _id in id_caption_obj:
+                    for words in id_caption_obj[_id]:
+                        word_ocean.extend([word for word in words if
+                                           (not bool(re.search(r'\d', word)) and (word is not ''))])
+
+                unique_words, counts_words = np.unique(word_ocean, return_counts=True)
+                unique_words = unique_words[counts_words >= min_freq]
+                unique_words = np.insert(unique_words, 2, ["<UNK>", "<PAD>"])
+                unique_words.sort()
+
+                print(unique_words[:10])
+
+                w2i = dict(
+                    [(word, i) for i, word in enumerate(unique_words)])
                 try:
                     with open("./data/w2i_dict.json", "w") as fp:
                         json.dump(w2i, fp)
@@ -60,6 +64,7 @@ class DataUtils:
 
         i2w = list(w2i.keys())
         i2w.sort()
+        print(i2w[:10])
         return w2i, i2w
 
     @staticmethod
@@ -111,37 +116,42 @@ class DataUtils:
 
         return source_dataset
 
-    def batch_generator(self, batch_size, use_random=False):
+    def get_test_labels(self):
+        id_caption_obj = self.get_id_caption_obj("testing_label.json")
+        return list(id_caption_obj.keys())
+
+    def get_train_labels(self):
+        id_caption_obj = self.get_id_caption_obj("training_label.json")
+        return list(id_caption_obj.keys())
+
+    def batch_generator(self, batch_size):
         id_label_obj = self.get_id_label_obj("training_label.json")
 
         # make sure always keys in the same order
         ordered_id_list = list(id_label_obj.keys())
         ordered_id_list.sort()
-
-        target_dataset = np.array([id_label_obj[id][0] for id in ordered_id_list])
-
-        max_len = max([len(t) for t in target_dataset])
-        target_dataset_mask = np.array(
-            [np.concatenate((np.ones(len(t)), np.zeros(max_len - len(t)))) for t in target_dataset])
-        target_dataset = np.array([np.pad(t, (0, max_len - len(t)), "edge") for t in target_dataset])
-        source_dataset = self.load_source_dataset(ordered_id_list)
-
-        assert target_dataset.shape[0] == source_dataset.shape[0]
-
-        sample_len = target_dataset.shape[0]
-        print(sample_len)
-        n_batch = sample_len // batch_size
-        indices_pool = [(i * batch_size, (i + 1) * batch_size) for i in range(n_batch)]
-
+        max_len = 44
+        i = 0
         while True:
-            if use_random:
-                indices_order = np.random.permutation(n_batch)
-            else:
-                indices_order = range(n_batch)
-            for index in indices_order:
+            target_dataset = np.array([id_label_obj[id][i % len(id_label_obj[id])] for id in ordered_id_list])
+
+            target_dataset_mask = np.array(
+                [np.concatenate((np.ones(len(t)), np.zeros(max_len - len(t)))) for t in target_dataset])
+            target_dataset = np.array(
+                [np.pad(t, (0, max_len - len(t)), "edge") for t in target_dataset])
+            source_dataset = self.load_source_dataset(ordered_id_list)
+
+            assert target_dataset.shape[0] == source_dataset.shape[0]
+
+            sample_len = target_dataset.shape[0]
+            n_batch = sample_len // batch_size
+            indices_pool = [(i * batch_size, (i + 1) * batch_size) for i in range(n_batch)]
+
+            for index in range(n_batch):
                 split_pair = indices_pool[index]
                 s, e = split_pair[0], split_pair[1]
                 yield source_dataset[s:e], target_dataset[s:e], target_dataset_mask[s:e]
+            i += 1
 
 
 def demo(batch_size):
