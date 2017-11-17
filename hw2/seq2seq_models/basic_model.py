@@ -98,7 +98,7 @@ class BasicModel_Train:
 class BasicModel_Infer:
     def __init__(self, batch_size, n_feat, vocab_size, embedding_size, max_encoder_time, max_decoder_time,
                  hidden_units, max_gradient_norm=100, learning_rate=0.0001, bos_id=0, eos_id=1,
-                 maximum_iterations=100, use_beam_search=True, beam_width=10):
+                 maximum_iterations=100, use_beam_search=True, beam_width=10, **kwargs):
         # image feat matrix [batch, time_step, n_feat]
         # no need for embedding
         self.encoder_inputs = tf.placeholder(tf.float32, [batch_size, max_encoder_time, n_feat],

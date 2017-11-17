@@ -4,6 +4,7 @@ from data_utils import *
 import pandas as pd
 from model_debug import *
 from seq2seq_models.basic_model import *
+import json
 
 VOCAB_SIZE = 3725
 MAX_ENCODER_TIME = 80
@@ -13,7 +14,7 @@ SAMPLE_LENGTH = 1450
 
 batch_size = 50
 embedding_size = 1000
-hidden_units = 128
+hidden_units = 256
 n_epoch = 1000
 learning_rate = 0.1
 
@@ -35,7 +36,7 @@ def i2s(iw2, translation):
 def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_train=False,
           use_scheduled_sampling=True, dropout=0.8):
     if checkpoints_path is None:
-        checkpoints_path = "./outputs/model.ckpt"
+        checkpoints_path = "./outputs/models/default/model.ckpt"
 
     du = DataUtils(root_data_path)
     batch_generator = du.batch_generator(batch_size)
@@ -43,24 +44,35 @@ def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_
         id_caption_obj = du.get_id_caption_obj("training_label.json")
         w2i, i2w = du.get_dictionary(id_caption_obj)
 
-    machine = train_model(batch_size=batch_size, n_feat=N_FEAT, vocab_size=VOCAB_SIZE,
-                          embedding_size=embedding_size,
-                          max_encoder_time=MAX_ENCODER_TIME,
-                          max_decoder_time=MAX_DECODER_TIME,
-                          hidden_units=hidden_units, learning_rate=learning_rate, dropout=dropout,
-                          use_scheduled_sampling=use_scheduled_sampling)
+    config_obj = {
+        "batch_size": batch_size,
+        "n_feat": N_FEAT,
+        "vocab_size": VOCAB_SIZE,
+        "embedding_size": embedding_size,
+        "max_encoder_time": MAX_ENCODER_TIME,
+        "max_decoder_time": MAX_DECODER_TIME,
+        "hidden_units": hidden_units,
+        "learning_rate": learning_rate,
+        "dropout": dropout,
+        "use_scheduled_sampling": use_scheduled_sampling
+    }
+
+    with open(checkpoints_path.replace("ckpt", "json"), "w") as fp:
+        json.dump(config_obj, fp)
+
+    machine = train_model(**config_obj)
 
     sess = tf.Session()
     saver = tf.train.Saver()
 
     if continue_train:
-        print("shit")
+        print("continue training")
         saver.restore(sess, checkpoints_path)
         sess.run(tf.tables_initializer())
     else:
         sess.run(tf.global_variables_initializer())
 
-    summary_writer = tf.summary.FileWriter('./outputs/logs')
+    summary_writer = tf.summary.FileWriter(checkpoints_path.replace("/models/", "/logs/"))
     n_batch = SAMPLE_LENGTH // batch_size
     for i in range(n_epoch):
         print("==========={}============".format(i))
@@ -104,7 +116,7 @@ def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_
     summary_writer.close()
 
 
-def infer(root_data_path, checkpoints_path, output_path, infer_model, valid=False):
+def infer(root_data_path, checkpoints_path, output_path, infer_model, valid=False, **kwargs):
     du = DataUtils(root_data_path)
 
     id_caption_obj = du.get_id_caption_obj("training_label.json")
@@ -116,12 +128,13 @@ def infer(root_data_path, checkpoints_path, output_path, infer_model, valid=Fals
     else:
         missions = du.get_test_labels()
         missions_inputs = [du.load_feat(mission, "test") for mission in missions]
-    print(infer_model)
-    machine = infer_model(batch_size=1, n_feat=N_FEAT, vocab_size=VOCAB_SIZE,
-                          embedding_size=embedding_size,
-                          max_encoder_time=MAX_ENCODER_TIME,
-                          max_decoder_time=MAX_DECODER_TIME,
-                          hidden_units=hidden_units)
+
+    with open(checkpoints_path.replace("ckpt", "json"), "w") as fp:
+        config_obj = json.load(fp)
+
+    config_obj["batch_size"] = 1
+    config_obj["valid"] = valid
+    machine = infer_model(**config_obj)
 
     sess = tf.Session()
     # sess.run(tf.global_variables_initializer())
