@@ -1,7 +1,7 @@
 import json
 import os
 import numpy as np
-
+import pandas as pd
 import re
 
 
@@ -19,7 +19,7 @@ class DataUtils:
     @staticmethod
     def format_caption(caption):
         caption = caption.replace(",", " ").replace(".", " ").replace(":", " ").replace("!", " ").replace("  ", " ") \
-            .replace("'s", " is").replace("'", " ").replace("&", " ").replace("(", " ").replace(")", " ") \
+            .replace("&", " ").replace("(", " ").replace(")", " ") \
             .replace("-", " ").replace("[", " ").replace("]", " ").replace("\"", " ")
         return '<BOS> ' + caption.strip().lower() + ' <EOS>'
 
@@ -88,8 +88,10 @@ class DataUtils:
     def load_feat(self, id, d_type="train"):
         if d_type == "train":
             return np.load(os.path.join(self.root_data_path, "training_data/feat/{}.npy".format(id)))
-        else:
+        elif d_type == "test":
             return np.load(os.path.join(self.root_data_path, "testing_data/feat/{}.npy".format(id)))
+        else:
+            return np.load(os.path.join(self.root_data_path, "peer_review/feat/{}.npy".format(id)))
 
     def load_source_dataset(self, ordered_id_list=None):
         if ordered_id_list is None:
@@ -123,6 +125,11 @@ class DataUtils:
     def get_train_labels(self):
         id_caption_obj = self.get_id_caption_obj("training_label.json")
         return list(id_caption_obj.keys())
+
+    def get_peer_labels(self):
+        df = pd.read_csv(os.path.join(self.root_data_path, "peer_review_id.txt"), header=None)
+
+        return list(list(df[0].as_matrix()))
 
     def batch_generator(self, batch_size):
         id_label_obj = self.get_id_label_obj("training_label.json")

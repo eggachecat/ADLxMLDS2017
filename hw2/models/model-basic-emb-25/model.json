@@ -1,0 +1,12 @@
+{
+  "batch_size": 50,
+  "n_feat": 4096,
+  "vocab_size": 3725,
+  "embedding_size": 256,
+  "max_encoder_time": 80,
+  "max_decoder_time": 44,
+  "hidden_units": 256,
+  "learning_rate": 1.0,
+  "dropout": 0.8,
+  "use_scheduled_sampling": false
+}

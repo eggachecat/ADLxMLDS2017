@@ -12,7 +12,8 @@ class BasicModel_Train:
     """
 
     def __init__(self, batch_size, n_feat, vocab_size, embedding_size, max_encoder_time, max_decoder_time,
-                 hidden_units, max_gradient_norm=100, learning_rate=0.0001, dropout=0.2, use_scheduled_sampling=False):
+                 hidden_units, max_gradient_norm=5, learning_rate=0.0001, dropout=0.2, use_scheduled_sampling=False,
+                 decay_steps=5, decay_rate=0.5):
         # image feat matrix [batch, time_step, n_feat]
         # no need for embedding
         self.encoder_inputs = tf.placeholder(tf.float32, [batch_size, max_encoder_time, n_feat],
@@ -28,6 +29,8 @@ class BasicModel_Train:
 
         self.decoder_mask = tf.placeholder(tf.float32, [batch_size, max_decoder_time],
                                            name='decoder_mask')
+
+        self.global_step = tf.placeholder(tf.int32, shape=[], name='global_step')
 
         if use_scheduled_sampling:
             self.sampling_probability = tf.placeholder(tf.float32, [], name="sampling_probability")
@@ -86,9 +89,13 @@ class BasicModel_Train:
                 self.gradients, max_gradient_norm)
 
         with tf.variable_scope("optimization"):
-            self.optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-            # self.train_op = self.optimizer.minimize(self.train_loss)
+            self.learning_rate = tf.train.exponential_decay(
+                learning_rate=learning_rate,
+                global_step=self.global_step,
+                decay_steps=decay_steps,
+                decay_rate=decay_rate)
 
+            self.optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
             self.update_step = self.optimizer.apply_gradients(
                 zip(self.clipped_gradients, self.params))
 

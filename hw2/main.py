@@ -2,7 +2,6 @@ from seq2seq_models import *
 import tensorflow as tf
 from data_utils import *
 import pandas as pd
-from model_debug import *
 from seq2seq_models.basic_model import *
 import json
 
@@ -13,10 +12,12 @@ N_FEAT = 4096
 SAMPLE_LENGTH = 1450
 
 batch_size = 50
-embedding_size = 1000
+# 1000
+embedding_size = 128
 hidden_units = 256
 n_epoch = 1000
 learning_rate = 0.1
+global_step_unit = 10
 
 
 def i2s(iw2, translation):
@@ -34,7 +35,7 @@ def i2s(iw2, translation):
 
 
 def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_train=False,
-          use_scheduled_sampling=True, dropout=0.8):
+          use_scheduled_sampling=False, dropout=0.7):
     if checkpoints_path is None:
         checkpoints_path = "./outputs/models/default/model.ckpt"
 
@@ -57,6 +58,9 @@ def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_
         "use_scheduled_sampling": use_scheduled_sampling
     }
 
+    if not os.path.exists(os.path.dirname(os.path.abspath(checkpoints_path))):
+        os.makedirs(os.path.dirname(os.path.abspath(checkpoints_path)))
+
     with open(checkpoints_path.replace("ckpt", "json"), "w") as fp:
         json.dump(config_obj, fp)
 
@@ -71,9 +75,10 @@ def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_
         sess.run(tf.tables_initializer())
     else:
         sess.run(tf.global_variables_initializer())
-
-    summary_writer = tf.summary.FileWriter(checkpoints_path.replace("/models/", "/logs/"))
+    summary_writer = tf.summary.FileWriter(
+        os.path.join(os.path.dirname(os.path.abspath(checkpoints_path)), "logs"), sess.graph)
     n_batch = SAMPLE_LENGTH // batch_size
+
     for i in range(n_epoch):
         print("==========={}============".format(i))
         for j in range(n_batch):
@@ -84,7 +89,8 @@ def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_
                 machine.decoder_lengths: np.array([d.shape[0] for d in decoder_inputs]),
                 machine.decoder_inputs: decoder_inputs,
                 machine.decoder_outputs: np.roll(decoder_inputs, -1),
-                machine.decoder_mask: decoder_mask
+                machine.decoder_mask: decoder_mask,
+                machine.global_step: i
             }
             if use_scheduled_sampling:
                 feed_dict_[machine.sampling_probability] = 0.995 ** i
@@ -116,24 +122,28 @@ def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_
     summary_writer.close()
 
 
-def infer(root_data_path, checkpoints_path, output_path, infer_model, valid=False, **kwargs):
+def infer(root_data_path, checkpoints_path, output_path, infer_model, infer_type=1, **kwargs):
     du = DataUtils(root_data_path)
 
     id_caption_obj = du.get_id_caption_obj("training_label.json")
     w2i, iw2 = du.get_dictionary(id_caption_obj)
 
-    if valid:
+    if infer_type == 0:
         missions = list(id_caption_obj.keys())
         missions_inputs = [du.load_feat(mission, "train") for mission in missions]
-    else:
+    elif infer_type == 1:
         missions = du.get_test_labels()
         missions_inputs = [du.load_feat(mission, "test") for mission in missions]
+    else:
+        missions = du.get_peer_labels()
+        missions_inputs = [du.load_feat(mission, "peer_review") for mission in missions]
 
-    with open(checkpoints_path.replace("ckpt", "json"), "w") as fp:
+    print(checkpoints_path.replace("ckpt", "json"))
+    with open(checkpoints_path.replace("ckpt", "json")) as fp:
         config_obj = json.load(fp)
 
     config_obj["batch_size"] = 1
-    config_obj["valid"] = valid
+    config_obj["valid"] = infer_type
     machine = infer_model(**config_obj)
 
     sess = tf.Session()
@@ -171,8 +181,8 @@ if __name__ == '__main__':
     parser.add_argument('-op', dest="output_path", help='path of output')
     parser.add_argument('-mt', dest="model_type", help='0-> basic; 1->attention; ', default=0, type=int)
 
-    parser.add_argument('-dropout', dest="dropout", default=0.5, type=float)
-    parser.add_argument('-use_scheduled_sampling', dest="use_scheduled_sampling", default=True, type=bool)
+    parser.add_argument('-dropout', dest="dropout", default=0.8, type=float)
+    parser.add_argument('-use_scheduled_sampling', dest="use_scheduled_sampling", default=False, type=bool)
 
     parser.add_argument('-a', dest="action", help='action: \n\t0-> train; \n\t1->infer; n\t2->infer; ', default=0,
                         type=int)
@@ -181,9 +191,6 @@ if __name__ == '__main__':
 
     MODEL_KEYS = ["basic", "attention"]
     model_obj = MODEL_MAP[MODEL_KEYS[opt.model_type]]
-
-    if opt.action == -2:
-        debug_train(root_data_path=opt.data_path)
 
     if opt.action == 0:
         train(root_data_path=opt.data_path, checkpoints_path=opt.model_path, train_model=model_obj["train"])
@@ -194,7 +201,12 @@ if __name__ == '__main__':
         train(root_data_path=opt.data_path, checkpoints_path=opt.model_path, continue_train=True,
               train_model=model_obj["train"])
     if opt.action == 3:
-        infer(root_data_path=opt.data_path, checkpoints_path=opt.model_path, output_path=opt.output_path, valid=True,
+        infer(root_data_path=opt.data_path, checkpoints_path=opt.model_path, output_path=opt.output_path,
+              infer_type=0,
+              infer_model=model_obj["infer"])
+    if opt.action == 4:
+        infer(root_data_path=opt.data_path, checkpoints_path=opt.model_path, output_path=opt.output_path,
+              infer_type=2,
               infer_model=model_obj["infer"])
 
 
