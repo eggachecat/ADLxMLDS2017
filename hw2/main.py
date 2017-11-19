@@ -13,11 +13,10 @@ SAMPLE_LENGTH = 1450
 
 batch_size = 50
 # 1000
-embedding_size = 128
-hidden_units = 256
+embedding_size = 256
+hidden_units = 512
 n_epoch = 1000
 learning_rate = 0.1
-global_step_unit = 10
 
 
 def i2s(iw2, translation):
@@ -35,7 +34,7 @@ def i2s(iw2, translation):
 
 
 def train(root_data_path, checkpoints_path, train_model, verbose=True, continue_train=False,
-          use_scheduled_sampling=False, dropout=0.7):
+          use_scheduled_sampling=False, dropout=0.9):
     if checkpoints_path is None:
         checkpoints_path = "./outputs/models/default/model.ckpt"
 
