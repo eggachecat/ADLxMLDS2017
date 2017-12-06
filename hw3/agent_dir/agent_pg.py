@@ -104,7 +104,7 @@ class Agent_PG(Agent):
         self.sess.run(tf.global_variables_initializer())
 
         self.saver = tf.train.Saver()
-        self.summary_writer = tf.summary.FileWriter("logs/", self.sess.graph)
+        self.summary_writer = tf.summary.FileWriter("outputs/logs/", self.sess.graph)
 
     def init_game_setting(self):
         """
