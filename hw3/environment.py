@@ -17,6 +17,9 @@ class Environment(object):
         else:
             self.env = gym.make(env_name)
 
+        self.env.seed(1)
+        self.env = self.env.unwrapped
+
         self.action_space = self.env.action_space
         self.observation_space = self.env.observation_space
 

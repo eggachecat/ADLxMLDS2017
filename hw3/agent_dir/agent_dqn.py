@@ -1,4 +1,9 @@
 from agent_dir.agent import Agent
+import tensorflow as tf
+import numpy as np
+
+
+# import pandas as pd
 
 
 class Agent_DQN(Agent):
@@ -21,7 +26,7 @@ class Agent_DQN(Agent):
     def init_game_setting(self):
         """
 
-        Testing function will call this function at the begining of new game
+        Testing function will call this function at the beginning of new game
         Put anything you want to initialize if necessary
 
         """
@@ -37,7 +42,15 @@ class Agent_DQN(Agent):
         ##################
         # YOUR CODE HERE #
         ##################
-        pass
+        print(self.env.action_space)
+        print(self.env.observation_space)
+        observation = self.env.reset()
+        self.env.env.render()
+
+        shape = observation.shape
+        observation_ = np.reshape(observation, (shape[2], shape[0], shape[1]))
+        for i in range(observation_.shape[0]):
+            np.savetxt("{}.csv".format(i), np.asarray(observation_[i]))
 
     def make_action(self, observation, test=True):
         """

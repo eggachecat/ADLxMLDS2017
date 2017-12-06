@@ -18,6 +18,8 @@ def parse():
     parser.add_argument('--test_dqn', action='store_true', help='whether test DQN')
     parser.add_argument('--video_dir', default=None, help='output video directory')
     parser.add_argument('--do_render', action='store_true', help='whether render environment')
+    parser.add_argument('--debug', action='store_true', help='debug or not')
+
     try:
         from argument import add_arguments
         parser = add_arguments(parser)
@@ -33,13 +35,17 @@ def run(args):
         env = Environment(env_name, args)
         from agent_dir.agent_pg import Agent_PG
         agent = Agent_PG(env, args)
-        agent.train()
 
     if args.train_dqn:
         env_name = args.env_name or 'BreakoutNoFrameskip-v4'
         env = Environment(env_name, args, atari_wrapper=True)
         from agent_dir.agent_dqn import Agent_DQN
         agent = Agent_DQN(env, args)
+
+    if args.debug:
+        print("debug")
+        agent.debug_train()
+    else:
         agent.train()
 
     if args.test_pg:
