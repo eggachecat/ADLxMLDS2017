@@ -5,13 +5,21 @@ import pylab as plt
 
 import tensorflow as tf
 from collections import deque
+import json
+import time
+import os
 
 np.random.seed(1)
 tf.set_random_seed(1)
 
 
+def save_hyperparameters(obj, setting_path):
+    with open(setting_path, "w") as fp:
+        json.dump(obj, fp)
+
+
 class Agent_PG(Agent):
-    def __init__(self, env, args):
+    def __init__(self, env, args, exp_id=None):
         """
         Initialize every things you need here.
         For example: building your model
@@ -19,12 +27,15 @@ class Agent_PG(Agent):
 
         super(Agent_PG, self).__init__(env)
 
+        self.exp_id = str(int(time.time())) if exp_id is None else exp_id
+
         if args.test_pg:
             # you can load your model here
             print('loading trained model')
 
         self.env_name = args.env_name
         self.args = args
+        self.is_pong = self.env_name is None or self.env_name == 'Pong-v0'
 
         if self.env_name is None or self.env_name == 'Pong-v0':
             self.dim_observation = 4
@@ -38,7 +49,21 @@ class Agent_PG(Agent):
         self.n_episode = 10000
         self.n_hidden_units = 10
 
-        self.checkpoints_path = "./outputs/model.ckpt"
+        self.base_bath = "./outputs/{}".format(self.exp_id)
+
+        if not os.path.exists(self.base_bath):
+            os.makedirs(self.base_bath)
+
+        self.checkpoints_path = os.path.join(self.base_bath, "model/")
+        self.log_path = os.path.join(self.base_bath, "log/")
+
+        if not os.path.exists(self.checkpoints_path):
+            os.makedirs(self.checkpoints_path)
+
+        if not os.path.exists(self.log_path):
+            os.makedirs(self.log_path)
+
+        self.checkpoints_path = self.checkpoints_path + "/model.ckpt"
 
         with tf.variable_scope("nn_approximate_policy_function"):
             self.observations = tf.placeholder(tf.float32, [None, self.dim_observation], name="observations")
@@ -72,7 +97,6 @@ class Agent_PG(Agent):
 
             self.approximate_action_probability = tf.nn.softmax(self.actions_value_prediction,
                                                                 name='approximate_action_probability')
-            # tf.summary.histogram("approximate_action_probability", self.approximate_action_probability)
 
         with tf.variable_scope("data_collection"):
             self.actions = tf.placeholder(tf.int32, [None, ], name="actions")
@@ -86,6 +110,7 @@ class Agent_PG(Agent):
             self.reward_of_approximation = tf.reduce_mean(self.credit_for_reward * self.rewards,
                                                           name="reward_of_approximation")
 
+            tf.summary.scalar("discounted_rewards", self.rewards[0])
             tf.summary.scalar("reward_of_approximation", self.reward_of_approximation)
 
         with tf.variable_scope("model_update"):
@@ -97,18 +122,9 @@ class Agent_PG(Agent):
         self.sess.run(tf.global_variables_initializer())
 
         self.saver = tf.train.Saver()
-        self.summary_writer = tf.summary.FileWriter("outputs/logs/", self.sess.graph)
+        self.summary_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
     def init_game_setting(self):
-        """
-
-        Testing function will call this function at the begining of new game
-        Put anything you want to initialize if necessary
-
-        """
-        ##################
-        # YOUR CODE HERE #
-        ##################
         pass
 
     @staticmethod
@@ -145,7 +161,7 @@ class Agent_PG(Agent):
             n_rounds = 0
 
             observation = self.env.reset()
-            if self.env_name is None or self.env_name == 'Pong-v0':
+            if self.is_pong:
                 observation = self.simplify_observation(observation)
 
             done = False
@@ -158,7 +174,7 @@ class Agent_PG(Agent):
 
                 observation, reward, done, info = self.env.step(action)
 
-                if self.env_name is None or self.env_name == 'Pong-v0':
+                if self.is_pong:
                     observation = self.simplify_observation(observation)
 
                 rewards.append(reward)
@@ -169,7 +185,7 @@ class Agent_PG(Agent):
             discounted_rewards = np.zeros_like(rewards)
             reward_ = 0
             for t in reversed(range(0, len(rewards))):
-                if rewards[t] != 0 and (self.env_name == 'Pong-v0' or self.env_name is None):
+                if rewards[t] != 0 and self.is_pong:
                     reward_ = 0
                 reward_ = reward_ * self.reward_discount_date + rewards[t]
                 discounted_rewards[t] = reward_
