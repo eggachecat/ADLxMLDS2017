@@ -8,13 +8,14 @@ from collections import deque
 import json
 import time
 import os
+import sys
 
 np.random.seed(1)
 tf.set_random_seed(1)
 
 
-def save_hyperparameters(obj, setting_path):
-    with open(setting_path, "w") as fp:
+def save_hyperparameters(obj, path):
+    with open(path, "w") as fp:
         json.dump(obj, fp)
 
 
@@ -37,22 +38,29 @@ class Agent_PG(Agent):
         self.args = args
         self.is_pong = self.env_name is None or self.env_name == 'Pong-v0'
 
-        if self.env_name is None or self.env_name == 'Pong-v0':
-            self.dim_observation = 4
+        if self.is_pong:
+            self.dim_observation = 6
+            self.n_actions = 2
         else:
             self.dim_observation = self.env.observation_space.shape[0]
+            self.n_actions = self.env.action_space.n
 
-        self.n_actions = self.env.action_space.n
         print(self.n_actions, self.dim_observation)
         self.reward_discount_date = 0.99
-        self.learning_rate = 0.02
-        self.n_episode = 10000
-        self.n_hidden_units = 10
+        self.learning_rate = 0.0001
+        self.n_episode = 1000000
+        self.n_hidden_units = 25
 
         self.base_bath = "./outputs/{}".format(self.exp_id)
-
         if not os.path.exists(self.base_bath):
             os.makedirs(self.base_bath)
+
+        save_hyperparameters({
+            "reward_discount_date": self.reward_discount_date,
+            "learning_rate": self.learning_rate,
+            "n_episode": self.n_episode,
+            "n_hidden_units": self.n_hidden_units
+        }, self.base_bath + "/settings.json")
 
         self.checkpoints_path = os.path.join(self.base_bath, "model/")
         self.log_path = os.path.join(self.base_bath, "log/")
@@ -68,17 +76,17 @@ class Agent_PG(Agent):
         with tf.variable_scope("nn_approximate_policy_function"):
             self.observations = tf.placeholder(tf.float32, [None, self.dim_observation], name="observations")
 
-            self.input_layer = tf.layers.dense(
+            self.hidden_layer_0 = tf.layers.dense(
                 inputs=self.observations,
                 units=self.n_hidden_units,
                 activation=tf.nn.tanh,
                 kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
                 bias_initializer=tf.constant_initializer(0.1),
-                name='input_layer'
+                name='hidden_layer_0'
             )
 
-            self.hidden_layer = tf.layers.dense(
-                inputs=self.input_layer,
+            self.hidden_layer_1 = tf.layers.dense(
+                inputs=self.hidden_layer_0,
                 units=self.n_hidden_units,
                 activation=tf.nn.tanh,
                 kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
@@ -87,7 +95,7 @@ class Agent_PG(Agent):
             )
 
             self.actions_value_prediction = tf.layers.dense(
-                inputs=self.hidden_layer,
+                inputs=self.hidden_layer_1,
                 units=self.n_actions,
                 activation=None,
                 kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
@@ -100,21 +108,26 @@ class Agent_PG(Agent):
 
         with tf.variable_scope("data_collection"):
             self.actions = tf.placeholder(tf.int32, [None, ], name="actions")
-            self.rewards = tf.placeholder(tf.float32, [None, ], name="rewards")
+            self.discounted_rewards = tf.placeholder(tf.float32, [None, ], name="discounted_rewards")
+            self.rewards = tf.placeholder(tf.float32, [], name="rewards")
+            self.rounds = tf.placeholder(tf.float32, [], name="rounds")
 
             self.chosen_actions = tf.one_hot(self.actions, self.n_actions)
             self.chosen_probability = tf.log(self.approximate_action_probability) * self.chosen_actions
 
             self.credit_for_reward = tf.reduce_sum(self.chosen_probability, axis=1, name="credit_for_reward")
 
-            self.reward_of_approximation = tf.reduce_mean(self.credit_for_reward * self.rewards,
+            self.reward_of_approximation = tf.reduce_mean(self.credit_for_reward * self.discounted_rewards,
                                                           name="reward_of_approximation")
 
-            tf.summary.scalar("discounted_rewards", self.rewards[0])
+            tf.summary.scalar("discounted_rewards", self.discounted_rewards[0])
+            tf.summary.scalar("rewards", self.rewards)
+            tf.summary.scalar("rounds", self.rounds)
             tf.summary.scalar("reward_of_approximation", self.reward_of_approximation)
 
         with tf.variable_scope("model_update"):
-            self.model_update = tf.train.AdamOptimizer(self.learning_rate).minimize(-1 * self.reward_of_approximation)
+            self.model_update = tf.train.AdamOptimizer(self.learning_rate) \
+                .minimize(-1 * self.reward_of_approximation)
 
         self.merged_summary = tf.summary.merge_all()
 
@@ -127,6 +140,8 @@ class Agent_PG(Agent):
     def init_game_setting(self):
         pass
 
+    previous_ball = (0.5, 0.5)
+
     @staticmethod
     def simplify_observation(observation):
         """
@@ -136,22 +151,35 @@ class Agent_PG(Agent):
             reduced observation
         """
         observation_ = observation[35:194, 16:144]
+        observation_ = observation_[::2, ::2]
+        # plt.imshow(observation_)
+        # plt.pause(0.00000000001)
+        #
+        # height = observation_.shape[0]
+        # width = observation_.shape[1]
+
         observation_ = np.average(observation_, axis=2)
         observation_ = observation_.astype(int)
 
         player = np.where(observation_ == 123)
         opponent = np.where(observation_ == 139)
         ball = np.where(observation_ == 236)
+        observation_[ball] = 0
 
         try:
-            reduced_observation = np.array([opponent[0][0], player[0][0], ball[0][0], ball[1][0]])
+            reduced_observation = np.array(
+                [opponent[0][0], player[0][0], ball[0][0], ball[1][0],
+                 Agent_PG.previous_ball[0], Agent_PG.previous_ball[1]])
+
+            Agent_PG.previous_ball = (ball[0][0], ball[1][0])
             return reduced_observation
         except:
-            return np.array([0, 0, 0, 0])
+            return None
 
     def train(self):
 
-        episode_history = deque(maxlen=100)
+        episode_history_rewards = deque(maxlen=30)
+        episode_history_rounds = deque(maxlen=30)
 
         for i in range(self.n_episode):
 
@@ -167,20 +195,34 @@ class Agent_PG(Agent):
             done = False
 
             while not done:
-                observations.append(observation)
+
+                observation_ = observation
+                if observation_ is not None:
+                    observations.append(observation)
 
                 action = self.make_action_train(observation)
-                actions.append(action)
+
+                if observation_ is not None:
+                    actions.append(action)
+
+                if self.is_pong:
+                    action = 2 if action == 0 else 3
 
                 observation, reward, done, info = self.env.step(action)
+
+                if observation_ is not None:
+                    rewards.append(reward)
+                else:
+                    if not reward == 0.0:
+                        rewards[-1] = reward
 
                 if self.is_pong:
                     observation = self.simplify_observation(observation)
 
-                rewards.append(reward)
                 n_rounds += 1
 
-            episode_history.append(np.sum(rewards))
+            episode_history_rewards.append(np.sum(rewards))
+            episode_history_rounds.append(n_rounds)
 
             discounted_rewards = np.zeros_like(rewards)
             reward_ = 0
@@ -194,9 +236,10 @@ class Agent_PG(Agent):
             discounted_rewards /= np.std(discounted_rewards)
 
             print("Episode {}".format(i))
-            print("Finished after {} timesteps".format(n_rounds))
-            print("Reward for this episode: {}".format(episode_history[-1]))
-            print("Average reward for last 100 episodes: {:.2f}".format(np.mean(episode_history)))
+            print("Finished after {} rounds".format(n_rounds))
+            print("Reward for this episode: {}".format(episode_history_rewards[-1]))
+            print("Average reward for last 30 episodes: {:.2f}".format(np.mean(episode_history_rewards)))
+            print("Average rounds for last 30 episodes: {:.2f}".format(np.mean(episode_history_rounds)))
 
             observations = np.vstack(observations)
             actions = np.array(actions, dtype=int)
@@ -204,9 +247,11 @@ class Agent_PG(Agent):
             _, summary = self.sess.run([self.model_update, self.merged_summary], feed_dict={
                 self.observations: observations,
                 self.actions: actions,
-                self.rewards: discounted_rewards
+                self.discounted_rewards: discounted_rewards,
+                self.rewards: np.sum(rewards),
+                self.rounds: n_rounds
             })
-
+            print(summary)
             self.summary_writer.add_summary(summary, i)
             self.saver.save(self.sess, self.checkpoints_path)
 
@@ -231,4 +276,4 @@ class Agent_PG(Agent):
                                     feed_dict={self.observations: observation[np.newaxis, :]})
             action = np.random.choice(range(gambler.shape[1]), p=gambler.ravel())
 
-        return action
+        return 2 if action == 0 else 3
