@@ -9,6 +9,7 @@ import json
 import time
 import os
 import sys
+import scipy
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -39,17 +40,19 @@ class Agent_PG(Agent):
         self.is_pong = self.env_name is None or self.env_name == 'Pong-v0'
 
         if self.is_pong:
-            self.dim_observation = 6
+            self.dim_observation = 8
             self.n_actions = 2
         else:
             self.dim_observation = self.env.observation_space.shape[0]
             self.n_actions = self.env.action_space.n
 
-        print(self.n_actions, self.dim_observation)
+        # print(self.n_actions, self.dim_observation)
         self.reward_discount_date = 0.99
-        self.learning_rate = 0.0001
+        self.learning_rate = 0.003
         self.n_episode = 1000000
         self.n_hidden_units = 25
+
+        self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=0.99)
 
         self.base_bath = "./outputs/{}".format(self.exp_id)
         if not os.path.exists(self.base_bath):
@@ -79,27 +82,25 @@ class Agent_PG(Agent):
             self.hidden_layer_0 = tf.layers.dense(
                 inputs=self.observations,
                 units=self.n_hidden_units,
-                activation=tf.nn.tanh,
+                activation=tf.nn.sigmoid,
                 kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
                 bias_initializer=tf.constant_initializer(0.1),
                 name='hidden_layer_0'
             )
 
-            self.hidden_layer_1 = tf.layers.dense(
-                inputs=self.hidden_layer_0,
-                units=self.n_hidden_units,
-                activation=tf.nn.tanh,
-                kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
-                bias_initializer=tf.constant_initializer(0.1),
-                name='hidden_layer'
-            )
+            # self.hidden_layer_1 = tf.layers.dense(
+            #     inputs=self.hidden_layer_0,
+            #     units=self.n_hidden_units,
+            #     activation=tf.nn.tanh,
+            #     kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
+            #     bias_initializer=tf.constant_initializer(0.1),
+            #     name='hidden_layer'
+            # )
 
             self.actions_value_prediction = tf.layers.dense(
-                inputs=self.hidden_layer_1,
+                inputs=self.hidden_layer_0,
                 units=self.n_actions,
                 activation=None,
-                kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
-                bias_initializer=tf.constant_initializer(0.1),
                 name='actions_probability_prediction'
             )
 
@@ -125,9 +126,12 @@ class Agent_PG(Agent):
             tf.summary.scalar("rounds", self.rounds)
             tf.summary.scalar("reward_of_approximation", self.reward_of_approximation)
 
+            self.gradients = tf.gradients(self.reward_of_approximation, [v for v in tf.global_variables() if
+                                                                         v.name == "nn_approximate_policy_function/actions_probability_prediction/kernel:0"][
+                0])
+
         with tf.variable_scope("model_update"):
-            self.model_update = tf.train.AdamOptimizer(self.learning_rate) \
-                .minimize(-1 * self.reward_of_approximation)
+            self.model_update = self.optimizer.minimize(-1 * self.reward_of_approximation)
 
         self.merged_summary = tf.summary.merge_all()
 
@@ -141,6 +145,8 @@ class Agent_PG(Agent):
         pass
 
     previous_ball = (0.5, 0.5)
+    previous_opponent = 0.5
+    previous_player = 0.5
 
     @staticmethod
     def simplify_observation(observation):
@@ -154,7 +160,7 @@ class Agent_PG(Agent):
         observation_ = observation_[::2, ::2]
         # plt.imshow(observation_)
         # plt.pause(0.00000000001)
-        #
+        # print(observation_.shape)
         # height = observation_.shape[0]
         # width = observation_.shape[1]
 
@@ -165,16 +171,52 @@ class Agent_PG(Agent):
         opponent = np.where(observation_ == 139)
         ball = np.where(observation_ == 236)
         observation_[ball] = 0
+        observation_[opponent] = 0
+        observation_[player] = 0
 
         try:
+            # plt.imshow(observation_)
+            # plt.pause(0.000001)
             reduced_observation = np.array(
-                [opponent[0][0], player[0][0], ball[0][0], ball[1][0],
-                 Agent_PG.previous_ball[0], Agent_PG.previous_ball[1]])
+                [opponent[0][0] / 80, player[0][0] / 80, ball[0][0] / 80, ball[1][0] / 64,
+                 Agent_PG.previous_opponent, Agent_PG.previous_player, Agent_PG.previous_ball[0],
+                 Agent_PG.previous_ball[1]])
 
-            Agent_PG.previous_ball = (ball[0][0], ball[1][0])
+            Agent_PG.previous_ball = (ball[0][0] / 80, ball[1][0] / 64)
+            Agent_PG.previous_opponent = opponent[0][0] / 80
+            Agent_PG.previous_player = player[0][0] / 80
+
             return reduced_observation
-        except:
-            return None
+        except Exception as e:
+            try:
+                reduced_observation = np.array(
+                    [0.5, player[0][0] / 80, 0.5, 0.5, 0.5, Agent_PG.previous_player, 0.5, 0.5])
+                Agent_PG.previous_player = player[0][0] / 80
+
+                return reduced_observation
+
+            except Exception as e:
+                print(e)
+                return None
+
+    @staticmethod
+    def preprocessing(o, image_size=[80, 80]):
+        """
+        Call this function to preprocess RGB image to grayscale image if necessary
+        This preprocessing code is from
+            https://github.com/hiwonjoon/tf-a3c-gpu/blob/master/async_agent.py
+
+        Input:
+        RGB image: np.array
+            RGB screen of game, shape: (210, 160, 3)
+        Default return: np.array
+            Grayscale image, shape: (80, 80, 1)
+
+        """
+        y = 0.2126 * o[:, :, 0] + 0.7152 * o[:, :, 1] + 0.0722 * o[:, :, 2]
+        y = y.astype(np.uint8)
+        resized = scipy.misc.imresize(y, image_size)
+        return np.expand_dims(resized.astype(np.float32), axis=2)
 
     def train(self):
 
@@ -195,7 +237,7 @@ class Agent_PG(Agent):
             done = False
 
             while not done:
-
+                # input("sth.")
                 observation_ = observation
                 if observation_ is not None:
                     observations.append(observation)
@@ -220,7 +262,7 @@ class Agent_PG(Agent):
                     observation = self.simplify_observation(observation)
 
                 n_rounds += 1
-
+            # print(rewards)
             episode_history_rewards.append(np.sum(rewards))
             episode_history_rounds.append(n_rounds)
 
@@ -244,16 +286,24 @@ class Agent_PG(Agent):
             observations = np.vstack(observations)
             actions = np.array(actions, dtype=int)
 
-            _, summary = self.sess.run([self.model_update, self.merged_summary], feed_dict={
+            tvars = tf.trainable_variables()
+            tvars_vals = self.sess.run(tvars)
+
+            for var, val in zip(tvars, tvars_vals):
+                print(var.name, val)
+
+            _, summary, gradients = self.sess.run([self.model_update, self.merged_summary, self.gradients], feed_dict={
                 self.observations: observations,
                 self.actions: actions,
                 self.discounted_rewards: discounted_rewards,
                 self.rewards: np.sum(rewards),
                 self.rounds: n_rounds
             })
-            print(summary)
+            # print(rewards)
+            # print("gradients", gradients)
             self.summary_writer.add_summary(summary, i)
             self.saver.save(self.sess, self.checkpoints_path)
+            # input("input something")
 
     def make_action_train(self, observation):
 
@@ -262,6 +312,8 @@ class Agent_PG(Agent):
         else:
             gambler = self.sess.run(self.approximate_action_probability,
                                     feed_dict={self.observations: observation[np.newaxis, :]})
+
+            # print("gambler", gambler)
             action = np.random.choice(range(gambler.shape[1]), p=gambler.ravel())
 
         return action
