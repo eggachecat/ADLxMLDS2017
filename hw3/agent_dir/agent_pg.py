@@ -9,7 +9,7 @@ import json
 import time
 import os
 import sys
-import scipy
+import scipy.misc
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -39,16 +39,9 @@ class Agent_PG(Agent):
         self.args = args
         self.is_pong = self.env_name is None or self.env_name == 'Pong-v0'
 
-        if self.is_pong:
-            self.dim_observation = 8
-            self.n_actions = 2
-        else:
-            self.dim_observation = self.env.observation_space.shape[0]
-            self.n_actions = self.env.action_space.n
-
-        # print(self.n_actions, self.dim_observation)
+        self.n_actions = 6
         self.reward_discount_date = 0.99
-        self.learning_rate = 0.003
+        self.learning_rate = 1e-4
         self.n_episode = 1000000
         self.n_hidden_units = 25
 
@@ -77,16 +70,41 @@ class Agent_PG(Agent):
         self.checkpoints_path = self.checkpoints_path + "/model.ckpt"
 
         with tf.variable_scope("nn_approximate_policy_function"):
-            self.observations = tf.placeholder(tf.float32, [None, self.dim_observation], name="observations")
+            self.observations = tf.placeholder(tf.float32, [None, 80, 80, 1], name="observations")
 
-            self.hidden_layer_0 = tf.layers.dense(
+            self.conv_1 = tf.layers.conv2d(
                 inputs=self.observations,
+                filters=16,
+                kernel_size=[8, 8],
+                strides=[4, 4],
+                padding="same",
+                activation=tf.nn.relu)
+
+            self.conv_2 = tf.layers.conv2d(
+                inputs=self.conv_1,
+                filters=32,
+                kernel_size=[4, 4],
+                strides=[2, 2],
+                padding="same",
+                activation=tf.nn.relu)
+
+            self.flat_layer = tf.reshape(self.conv_2, [-1, 10 * 10 * 32])
+
+            self.dense_layer_0 = tf.layers.dense(
+                inputs=self.flat_layer,
                 units=self.n_hidden_units,
-                activation=tf.nn.sigmoid,
-                kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
-                bias_initializer=tf.constant_initializer(0.1),
-                name='hidden_layer_0'
+                activation=tf.nn.relu,
+                name='dense_layer_0'
             )
+
+            # self.hidden_layer_0 = tf.layers.dense(
+            #     inputs=self.observations,
+            #     units=self.n_hidden_units,
+            #     activation=tf.nn.sigmoid,
+            #     kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
+            #     bias_initializer=tf.constant_initializer(0.1),
+            #     name='hidden_layer_0'
+            # )
 
             # self.hidden_layer_1 = tf.layers.dense(
             #     inputs=self.hidden_layer_0,
@@ -97,15 +115,15 @@ class Agent_PG(Agent):
             #     name='hidden_layer'
             # )
 
-            self.actions_value_prediction = tf.layers.dense(
-                inputs=self.hidden_layer_0,
+            self.approximate_action_probability = tf.layers.dense(
+                inputs=self.dense_layer_0,
                 units=self.n_actions,
-                activation=None,
-                name='actions_probability_prediction'
+                activation=tf.nn.softmax,
+                name='approximate_action_probability'
             )
-
-            self.approximate_action_probability = tf.nn.softmax(self.actions_value_prediction,
-                                                                name='approximate_action_probability')
+            #
+            # self.approximate_action_probability = tf.nn.softmax(self.actions_value_prediction,
+            #                                                     name='approximate_action_probability')
 
         with tf.variable_scope("data_collection"):
             self.actions = tf.placeholder(tf.int32, [None, ], name="actions")
@@ -126,10 +144,6 @@ class Agent_PG(Agent):
             tf.summary.scalar("rounds", self.rounds)
             tf.summary.scalar("reward_of_approximation", self.reward_of_approximation)
 
-            self.gradients = tf.gradients(self.reward_of_approximation, [v for v in tf.global_variables() if
-                                                                         v.name == "nn_approximate_policy_function/actions_probability_prediction/kernel:0"][
-                0])
-
         with tf.variable_scope("model_update"):
             self.model_update = self.optimizer.minimize(-1 * self.reward_of_approximation)
 
@@ -149,7 +163,7 @@ class Agent_PG(Agent):
     previous_player = 0.5
 
     @staticmethod
-    def simplify_observation(observation):
+    def simplify_observation_(observation):
         """
         This is the function ONLY for game Pong-v0
         :param observation: a RGB image
@@ -200,7 +214,7 @@ class Agent_PG(Agent):
                 return None
 
     @staticmethod
-    def preprocessing(o, image_size=[80, 80]):
+    def simplify_observation(o, image_size=[80, 80]):
         """
         Call this function to preprocess RGB image to grayscale image if necessary
         This preprocessing code is from
@@ -216,7 +230,15 @@ class Agent_PG(Agent):
         y = 0.2126 * o[:, :, 0] + 0.7152 * o[:, :, 1] + 0.0722 * o[:, :, 2]
         y = y.astype(np.uint8)
         resized = scipy.misc.imresize(y, image_size)
-        return np.expand_dims(resized.astype(np.float32), axis=2)
+        # plt.imshow(resized)
+        # plt.show()
+        #
+        o_ = np.expand_dims(resized.astype(np.float32), axis=2)
+        # print(o_.shape)
+        #
+        # plt.imshow(o_)
+        # plt.pause(0.00001)
+        return o_
 
     def train(self):
 
@@ -231,38 +253,20 @@ class Agent_PG(Agent):
             n_rounds = 0
 
             observation = self.env.reset()
-            if self.is_pong:
-                observation = self.simplify_observation(observation)
+            observation = self.simplify_observation(observation)
 
             done = False
 
             while not done:
-                # input("sth.")
-                observation_ = observation
-                if observation_ is not None:
-                    observations.append(observation)
-
+                observations.append(observation)
                 action = self.make_action_train(observation)
-
-                if observation_ is not None:
-                    actions.append(action)
-
-                if self.is_pong:
-                    action = 2 if action == 0 else 3
+                actions.append(action)
 
                 observation, reward, done, info = self.env.step(action)
-
-                if observation_ is not None:
-                    rewards.append(reward)
-                else:
-                    if not reward == 0.0:
-                        rewards[-1] = reward
-
-                if self.is_pong:
-                    observation = self.simplify_observation(observation)
-
+                rewards.append(reward)
+                observation = self.simplify_observation(observation)
                 n_rounds += 1
-            # print(rewards)
+
             episode_history_rewards.append(np.sum(rewards))
             episode_history_rounds.append(n_rounds)
 
@@ -273,47 +277,46 @@ class Agent_PG(Agent):
                     reward_ = 0
                 reward_ = reward_ * self.reward_discount_date + rewards[t]
                 discounted_rewards[t] = reward_
+            # print(list(discounted_rewards))
 
-            discounted_rewards -= np.mean(discounted_rewards)
+            # discounted_rewards -= np.mean(discounted_rewards)
             discounted_rewards /= np.std(discounted_rewards)
 
+            print(discounted_rewards)
             print("Episode {}".format(i))
             print("Finished after {} rounds".format(n_rounds))
             print("Reward for this episode: {}".format(episode_history_rewards[-1]))
             print("Average reward for last 30 episodes: {:.2f}".format(np.mean(episode_history_rewards)))
             print("Average rounds for last 30 episodes: {:.2f}".format(np.mean(episode_history_rounds)))
 
-            observations = np.vstack(observations)
+            observations = np.array(observations)
             actions = np.array(actions, dtype=int)
 
-            tvars = tf.trainable_variables()
-            tvars_vals = self.sess.run(tvars)
-
-            for var, val in zip(tvars, tvars_vals):
-                print(var.name, val)
-
-            _, summary, gradients = self.sess.run([self.model_update, self.merged_summary, self.gradients], feed_dict={
+            _, summary = self.sess.run([self.model_update, self.merged_summary], feed_dict={
                 self.observations: observations,
                 self.actions: actions,
                 self.discounted_rewards: discounted_rewards,
                 self.rewards: np.sum(rewards),
                 self.rounds: n_rounds
             })
-            # print(rewards)
-            # print("gradients", gradients)
+
             self.summary_writer.add_summary(summary, i)
             self.saver.save(self.sess, self.checkpoints_path)
-            # input("input something")
 
     def make_action_train(self, observation):
 
         if observation is None:
             action = self.env.get_random_action()
         else:
+            # conv_1, conv_2 = self.sess.run([self.conv_1, self.conv_2],
+            #                                feed_dict={self.observations: observation[np.newaxis, :]})
+            # print(observation[np.newaxis, :].shape)
+            # print(conv_1.shape, conv_2.shape)
+            # exit()
             gambler = self.sess.run(self.approximate_action_probability,
                                     feed_dict={self.observations: observation[np.newaxis, :]})
 
-            # print("gambler", gambler)
+            print("gambler", gambler)
             action = np.random.choice(range(gambler.shape[1]), p=gambler.ravel())
 
         return action
@@ -328,4 +331,4 @@ class Agent_PG(Agent):
                                     feed_dict={self.observations: observation[np.newaxis, :]})
             action = np.random.choice(range(gambler.shape[1]), p=gambler.ravel())
 
-        return 2 if action == 0 else 3
+        return action
