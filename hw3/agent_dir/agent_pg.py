@@ -6,11 +6,8 @@ import pylab as plt
 import tensorflow as tf
 from collections import deque
 import json
-import time
 import os
-import sys
-import scipy.misc
-
+import time
 np.random.seed(1)
 tf.set_random_seed(1)
 
@@ -38,20 +35,16 @@ class Agent_PG(Agent):
         self.args = args
 
         if self.env_name is None or self.env_name == 'Pong-v0':
-            self.observation_shape = [None, 80, 80, 1]
+            self.dim_observation = 4
         else:
-            self.observation_shape = [None, self.env.observation_space.shape[0]]
+            self.dim_observation = self.env.observation_space.shape[0]
 
         self.n_actions = self.env.action_space.n
-
+        print(self.n_actions, self.dim_observation)
         self.reward_discount_date = 0.99
         self.learning_rate = 0.02
         self.n_episode = 10000
         self.n_hidden_units = 10
-
-        # self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=0.99)
-        self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=0.99)
-
 
         self.base_bath = "./outputs/{}".format(self.exp_id)
         if not os.path.exists(self.base_bath):
@@ -72,14 +65,8 @@ class Agent_PG(Agent):
 
         if not os.path.exists(self.log_path):
             os.makedirs(self.log_path)
-
-        self.checkpoints_path = self.checkpoints_path + "/model.ckpt"
-
-        self.build_graph()
-
-    def build_graph(self):
         with tf.variable_scope("nn_approximate_policy_function"):
-            self.observations = tf.placeholder(tf.float32, self.observation_shape, name="observations")
+            self.observations = tf.placeholder(tf.float32, [None, self.dim_observation], name="observations")
 
             self.input_layer = tf.layers.dense(
                 inputs=self.observations,
@@ -110,12 +97,15 @@ class Agent_PG(Agent):
 
             self.approximate_action_probability = tf.nn.softmax(self.actions_value_prediction,
                                                                 name='approximate_action_probability')
+            # tf.summary.histogram("approximate_action_probability", self.approximate_action_probability)
 
         with tf.variable_scope("data_collection"):
             self.actions = tf.placeholder(tf.int32, [None, ], name="actions")
             self.discounted_rewards = tf.placeholder(tf.float32, [None, ], name="discounted_rewards")
-            self.rewards = tf.placeholder(tf.float32, [], name="rewards")
-            self.rounds = tf.placeholder(tf.float32, [], name="rounds")
+
+            # for sth.
+            self.episode_reward = tf.placeholder(tf.float32, [], name="episode_reward")
+            self.episode_rounds = tf.placeholder(tf.float32, [], name="episode_round")
 
             self.chosen_actions = tf.one_hot(self.actions, self.n_actions)
             self.chosen_probability = tf.log(self.approximate_action_probability) * self.chosen_actions
@@ -126,12 +116,12 @@ class Agent_PG(Agent):
                                                           name="reward_of_approximation")
 
             tf.summary.scalar("reward_of_approximation", self.reward_of_approximation)
-            tf.summary.scalar("discounted_rewards", tf.reduce_sum(self.discounted_rewards))
-            tf.summary.scalar("rewards", self.rewards)
-            tf.summary.scalar("rounds", self.rounds)
+            tf.summary.scalar("episode_discounted_reward", tf.reduce_sum(self.discounted_rewards))
+            tf.summary.scalar("episode_reward", self.episode_reward)
+            tf.summary.scalar("episode_rounds", self.episode_rounds)
 
         with tf.variable_scope("model_update"):
-            self.model_update = self.optimizer.minimize(-1 * self.reward_of_approximation)
+            self.model_update = tf.train.AdamOptimizer(self.learning_rate).minimize(-1 * self.reward_of_approximation)
 
         self.merged_summary = tf.summary.merge_all()
 
@@ -227,13 +217,12 @@ class Agent_PG(Agent):
             observations = np.vstack(observations)
             actions = np.array(actions, dtype=int)
 
-            print(np.sum(rewards), n_rounds)
             _, summary = self.sess.run([self.model_update, self.merged_summary], feed_dict={
                 self.observations: observations,
                 self.actions: actions,
                 self.discounted_rewards: discounted_rewards,
-                self.rewards: np.sum(rewards),
-                self.rounds: n_rounds
+                self.episode_reward: np.sum(rewards),
+                self.episode_rounds: n_rounds
             })
 
             self.summary_writer.add_summary(summary, i)
