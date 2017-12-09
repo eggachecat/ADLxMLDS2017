@@ -41,16 +41,16 @@ class Agent_PG(Agent):
 
         if self.is_pong:
             self.dim_observation = 8
-            self.n_actions = 2
+            self.n_actions = 6
         else:
             self.dim_observation = self.env.observation_space.shape[0]
             self.n_actions = self.env.action_space.n
 
         # print(self.n_actions, self.dim_observation)
         self.reward_discount_date = 0.99
-        self.learning_rate = 0.003
+        self.learning_rate = 0.01
         self.n_episode = 1000000
-        self.n_hidden_units = 25
+        self.n_hidden_units = 30
 
         self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=0.99)
 
@@ -78,7 +78,7 @@ class Agent_PG(Agent):
 
         with tf.variable_scope("nn_approximate_policy_function"):
             self.observations = tf.placeholder(tf.float32, [None, self.dim_observation], name="observations")
-
+            #
             self.hidden_layer_0 = tf.layers.dense(
                 inputs=self.observations,
                 units=self.n_hidden_units,
@@ -247,9 +247,6 @@ class Agent_PG(Agent):
                 if observation_ is not None:
                     actions.append(action)
 
-                if self.is_pong:
-                    action = 2 if action == 0 else 3
-
                 observation, reward, done, info = self.env.step(action)
 
                 if observation_ is not None:
@@ -274,8 +271,8 @@ class Agent_PG(Agent):
                 reward_ = reward_ * self.reward_discount_date + rewards[t]
                 discounted_rewards[t] = reward_
 
-            discounted_rewards -= np.mean(discounted_rewards)
-            discounted_rewards /= np.std(discounted_rewards)
+            # discounted_rewards -= np.mean(discounted_rewards)
+            # discounted_rewards /= np.std(discounted_rewards)
 
             print("Episode {}".format(i))
             print("Finished after {} rounds".format(n_rounds))
@@ -286,11 +283,11 @@ class Agent_PG(Agent):
             observations = np.vstack(observations)
             actions = np.array(actions, dtype=int)
 
-            tvars = tf.trainable_variables()
-            tvars_vals = self.sess.run(tvars)
-
-            for var, val in zip(tvars, tvars_vals):
-                print(var.name, val)
+            # tvars = tf.trainable_variables()
+            # tvars_vals = self.sess.run(tvars)
+            #
+            # for var, val in zip(tvars, tvars_vals):
+            #     print(var.name, val)
 
             _, summary, gradients = self.sess.run([self.model_update, self.merged_summary, self.gradients], feed_dict={
                 self.observations: observations,
@@ -328,4 +325,4 @@ class Agent_PG(Agent):
                                     feed_dict={self.observations: observation[np.newaxis, :]})
             action = np.random.choice(range(gambler.shape[1]), p=gambler.ravel())
 
-        return 2 if action == 0 else 3
+        return action
