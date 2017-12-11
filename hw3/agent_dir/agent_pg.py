@@ -73,6 +73,8 @@ class Agent_PG(Agent):
         if not os.path.exists(self.log_path):
             os.makedirs(self.log_path)
 
+        self.checkpoints_path += "/model.ckpt"
+
         with tf.variable_scope("nn_approximate_policy_function"):
             self.observations = tf.placeholder(tf.float32, [None] + self.dim_observation, name="observations")
 
@@ -141,7 +143,7 @@ class Agent_PG(Agent):
         self.sess.run(tf.global_variables_initializer())
 
         self.saver = tf.train.Saver()
-        self.summary_writer = tf.summary.FileWriter("outputs/logs/", self.sess.graph)
+        self.summary_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
     def init_game_setting(self):
         """
