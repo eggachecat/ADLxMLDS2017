@@ -11,6 +11,8 @@ import time
 import scipy.misc
 from scipy import stats
 
+import tensorflow.contrib.layers as tf_layers
+
 np.random.seed(1)
 tf.set_random_seed(1)
 
@@ -49,6 +51,7 @@ class Agent_PG(Agent):
         self.n_episode = 1000000
         self.n_hidden_units = 128
         self.previous_observation = None
+        self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
 
         self.base_bath = "./outputs/{}".format(self.exp_id)
         if not os.path.exists(self.base_bath):
@@ -73,35 +76,35 @@ class Agent_PG(Agent):
         with tf.variable_scope("nn_approximate_policy_function"):
             self.observations = tf.placeholder(tf.float32, [None] + self.dim_observation, name="observations")
 
-            self.conv_1 = tf.layers.conv2d(
+            self.conv_1 = tf_layers.conv2d(
                 inputs=self.observations,
-                filters=16,
+                num_outputs=16,
                 kernel_size=[8, 8],
-                strides=[4, 4],
+                stride=[4, 4],
                 padding="same",
-                activation=tf.nn.relu)
+                activation_fn=tf.nn.relu)
 
-            self.conv_2 = tf.layers.conv2d(
+            self.conv_2 = tf_layers.conv2d(
                 inputs=self.conv_1,
-                filters=32,
+                num_outputs=32,
                 kernel_size=[4, 4],
-                strides=[2, 2],
+                stride=[2, 2],
                 padding="same",
-                activation=tf.nn.relu)
+                activation_fn=tf.nn.relu)
 
-            self.flat_layer = tf.reshape(self.conv_2, [-1, 10 * 10 * 32])
+            self.flat_layer = tf_layers.flatten(self.conv_2)
+            # tf.reshape(self.conv_2, [-1, 10 * 10 * 32])
 
-            self.dense_layer = tf.layers.dense(
+            self.dense_layer = tf_layers.fully_connected(
                 inputs=self.flat_layer,
-                units=self.n_hidden_units,
-                activation=tf.nn.relu,
+                num_outputs=self.n_hidden_units,
+                activation_fn=tf.nn.relu,
             )
 
-            self.actions_value_prediction = tf.layers.dense(
+            self.actions_value_prediction = tf_layers.fully_connected(
                 inputs=self.flat_layer,
-                units=self.n_actions,
-                activation=None,
-                name='actions_value_prediction'
+                num_outputs=self.n_actions,
+                activation_fn=None,
             )
             #
             self.approximate_action_probability = tf.nn.softmax(self.actions_value_prediction,
@@ -129,7 +132,7 @@ class Agent_PG(Agent):
             tf.summary.scalar("episode_rounds", self.episode_rounds)
 
         with tf.variable_scope("model_update"):
-            self.model_update = tf.train.GradientDescentOptimizer(1e-4).minimize(
+            self.model_update = self.optimizer.minimize(
                 -1 * self.reward_of_approximation)
 
         self.merged_summary = tf.summary.merge_all()
@@ -153,11 +156,11 @@ class Agent_PG(Agent):
         pass
 
     previous_frame = None
-    all_zeros = True
 
     @staticmethod
     def simplify_observation(o, image_size=[80, 80]):
 
+        o = o[35:194, 16:144]
         y = 0.2126 * o[:, :, 0] + 0.7152 * o[:, :, 1] + 0.0722 * o[:, :, 2]
         y = y.astype(np.uint8)
         resized = scipy.misc.imresize(y, image_size)
@@ -166,12 +169,7 @@ class Agent_PG(Agent):
         if Agent_PG.previous_frame is None:
             simplified_observation = np.zeros_like(simplified_frame)
         else:
-            if Agent_PG.all_zeros:
-                simplified_observation = np.zeros_like(simplified_frame)
-
-            else:
-                simplified_observation = simplified_frame - Agent_PG.previous_frame
-            Agent_PG.all_zeros = False
+            simplified_observation = simplified_frame - Agent_PG.previous_frame
 
         Agent_PG.previous_frame = simplified_frame.copy()
         return simplified_observation
@@ -271,7 +269,6 @@ class Agent_PG(Agent):
             self.summary_writer.add_summary(summary, i)
             self.saver.save(self.sess, self.checkpoints_path)
             Agent_PG.previous_frame = None
-            Agent_PG.all_zeros = True
             Agent_PG.i = 0
 
     i = 0
