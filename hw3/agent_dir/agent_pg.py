@@ -48,7 +48,7 @@ class Agent_PG(Agent):
 
         # print(self.n_actions, self.dim_observation)
         self.reward_discount_date = 0.99
-        self.learning_rate = 0.00001
+        self.learning_rate = 1e-3
         self.n_episode = 1000000
         self.n_hidden_units = 30
 
@@ -78,13 +78,13 @@ class Agent_PG(Agent):
 
         with tf.variable_scope("nn_approximate_policy_function"):
             self.observations = tf.placeholder(tf.float32, [None, self.dim_observation], name="observations")
-            #
+            # #
             self.hidden_layer_0 = tf.layers.dense(
                 inputs=self.observations,
                 units=self.n_hidden_units,
-                activation=tf.nn.sigmoid,
                 kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.0001),
-                bias_initializer=tf.constant_initializer(0.1),
+                bias_initializer=tf.constant_initializer(0.0),
+                activation=tf.nn.relu,
                 name='hidden_layer_0'
             )
 
@@ -98,9 +98,11 @@ class Agent_PG(Agent):
             # )
 
             self.actions_value_prediction = tf.layers.dense(
-                inputs=self.hidden_layer_0,
+                inputs=self.observations,
                 units=self.n_actions,
                 activation=None,
+                kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.0001),
+                bias_initializer=tf.constant_initializer(0.0),
                 name='actions_probability_prediction'
             )
 
@@ -126,9 +128,7 @@ class Agent_PG(Agent):
             tf.summary.scalar("rounds", self.rounds)
             tf.summary.scalar("reward_of_approximation", self.reward_of_approximation)
 
-            self.gradients = tf.gradients(self.reward_of_approximation, [v for v in tf.global_variables() if
-                                                                         v.name == "nn_approximate_policy_function/actions_probability_prediction/kernel:0"][
-                0])
+            self.gradients = tf.gradients(self.reward_of_approximation, [v for v in tf.global_variables()])
 
         with tf.variable_scope("model_update"):
             self.model_update = self.optimizer.minimize(-1 * self.reward_of_approximation)
@@ -188,16 +188,7 @@ class Agent_PG(Agent):
 
             return reduced_observation
         except Exception as e:
-            try:
-                reduced_observation = np.array(
-                    [0.5, player[0][0] / 80, 0.5, 0.5, 0.5, Agent_PG.previous_player, 0.5, 0.5])
-                Agent_PG.previous_player = player[0][0] / 80
-
-                return reduced_observation
-
-            except Exception as e:
-                print(e)
-                return None
+            return None
 
     @staticmethod
     def preprocessing(o, image_size=[80, 80]):
@@ -244,10 +235,13 @@ class Agent_PG(Agent):
 
                 action = self.make_action_train(observation)
 
+                # print(observation_, action)
+
                 if observation_ is not None:
+                    actions.append(action)
+
                     if self.is_pong:
                         action = 2 if action == 0 else 3
-                    actions.append(action)
 
                 observation, reward, done, info = self.env.step(action)
 
@@ -273,8 +267,16 @@ class Agent_PG(Agent):
                 reward_ = reward_ * self.reward_discount_date + rewards[t]
                 discounted_rewards[t] = reward_
 
-            # discounted_rewards -= np.mean(discounted_rewards)
-            # discounted_rewards /= np.std(discounted_rewards)
+            # print(discounted_rewards[:10])
+
+            discounted_rewards -= np.mean(discounted_rewards)
+            discounted_rewards /= np.std(discounted_rewards)
+
+            # print(rewards[:10])
+            # print(discounted_rewards[:10])
+            #
+            # print(actions[:10])
+            # print(observations[:10])
 
             print("Episode {}".format(i))
             print("Finished after {} rounds".format(n_rounds))
@@ -287,22 +289,25 @@ class Agent_PG(Agent):
 
             # tvars = tf.trainable_variables()
             # tvars_vals = self.sess.run(tvars)
-            #
+            # #
             # for var, val in zip(tvars, tvars_vals):
             #     print(var.name, val)
 
-            _, summary, gradients = self.sess.run([self.model_update, self.merged_summary, self.gradients], feed_dict={
-                self.observations: observations,
-                self.actions: actions,
-                self.discounted_rewards: discounted_rewards,
-                self.rewards: np.sum(rewards),
-                self.rounds: n_rounds
-            })
-            # print(rewards)
+            gradients, _, summary = self.sess.run(
+                [self.gradients, self.model_update, self.merged_summary], feed_dict={
+                    self.observations: observations,
+                    self.actions: actions,
+                    self.discounted_rewards: discounted_rewards,
+                    self.rewards: np.sum(rewards),
+                    self.rounds: n_rounds
+                })
             # print("gradients", gradients)
             self.summary_writer.add_summary(summary, i)
             self.saver.save(self.sess, self.checkpoints_path)
-            # input("input something")
+            Agent_PG.i = 0
+            print("=============================================")
+
+    i = 0
 
     def make_action_train(self, observation):
 
@@ -312,8 +317,14 @@ class Agent_PG(Agent):
             gambler = self.sess.run(self.approximate_action_probability,
                                     feed_dict={self.observations: observation[np.newaxis, :]})
 
-            print("gambler", gambler)
             action = np.random.choice(range(gambler.shape[1]), p=gambler.ravel())
+
+            if Agent_PG.i < 1:
+                print("gambler", gambler)
+                print("action", action)
+                print("observation", observation)
+
+                Agent_PG.i += 1
 
         return action
 
