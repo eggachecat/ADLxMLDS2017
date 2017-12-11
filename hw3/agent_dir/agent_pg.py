@@ -45,7 +45,7 @@ class Agent_PG(Agent):
         self.n_actions = self.env.action_space.n
         print(self.n_actions, self.dim_observation)
         self.reward_discount_date = 0.95
-        self.learning_rate = 1e4
+        self.learning_rate = 1e-4
         self.n_episode = 1000000
         self.n_hidden_units = 128
         self.previous_observation = None
