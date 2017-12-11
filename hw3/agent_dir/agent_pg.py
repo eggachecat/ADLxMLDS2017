@@ -41,14 +41,14 @@ class Agent_PG(Agent):
 
         if self.is_pong:
             self.dim_observation = 8
-            self.n_actions = 6
+            self.n_actions = 2
         else:
             self.dim_observation = self.env.observation_space.shape[0]
             self.n_actions = self.env.action_space.n
 
         # print(self.n_actions, self.dim_observation)
         self.reward_discount_date = 0.99
-        self.learning_rate = 0.01
+        self.learning_rate = 0.00001
         self.n_episode = 1000000
         self.n_hidden_units = 30
 
@@ -83,7 +83,7 @@ class Agent_PG(Agent):
                 inputs=self.observations,
                 units=self.n_hidden_units,
                 activation=tf.nn.sigmoid,
-                kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.3),
+                kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.0001),
                 bias_initializer=tf.constant_initializer(0.1),
                 name='hidden_layer_0'
             )
@@ -245,6 +245,8 @@ class Agent_PG(Agent):
                 action = self.make_action_train(observation)
 
                 if observation_ is not None:
+                    if self.is_pong:
+                        action = 2 if action == 0 else 3
                     actions.append(action)
 
                 observation, reward, done, info = self.env.step(action)
@@ -310,7 +312,7 @@ class Agent_PG(Agent):
             gambler = self.sess.run(self.approximate_action_probability,
                                     feed_dict={self.observations: observation[np.newaxis, :]})
 
-            # print("gambler", gambler)
+            print("gambler", gambler)
             action = np.random.choice(range(gambler.shape[1]), p=gambler.ravel())
 
         return action
@@ -325,4 +327,4 @@ class Agent_PG(Agent):
                                     feed_dict={self.observations: observation[np.newaxis, :]})
             action = np.random.choice(range(gambler.shape[1]), p=gambler.ravel())
 
-        return action
+        return 2 if action == 0 else 3
