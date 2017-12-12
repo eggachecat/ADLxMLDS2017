@@ -10,10 +10,10 @@ import time
 import os
 import sys
 import scipy
-
+import tensorflow.contrib.layers as tf_layers
+import scipy.stats as sci_stats
 np.random.seed(1)
 tf.set_random_seed(1)
-
 
 def save_hyperparameters(obj, path):
     with open(path, "w") as fp:
@@ -48,9 +48,9 @@ class Agent_PG(Agent):
 
         # print(self.n_actions, self.dim_observation)
         self.reward_discount_date = 0.99
-        self.learning_rate = 1e-3
+        self.learning_rate = 0.00001
         self.n_episode = 1000000
-        self.n_hidden_units = 30
+        self.n_hidden_units = 50
 
         self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=0.99)
 
@@ -78,15 +78,14 @@ class Agent_PG(Agent):
 
         with tf.variable_scope("nn_approximate_policy_function"):
             self.observations = tf.placeholder(tf.float32, [None, self.dim_observation], name="observations")
-            # #
-            self.hidden_layer_0 = tf.layers.dense(
-                inputs=self.observations,
-                units=self.n_hidden_units,
-                kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.0001),
-                bias_initializer=tf.constant_initializer(0.0),
-                activation=tf.nn.relu,
-                name='hidden_layer_0'
-            )
+            #
+            # self.hidden_layer_0 = tf.layers.dense(
+            #     inputs=self.observations,
+            #     units=self.n_hidden_units,
+            #     kernel_initializer=tf_layers.xavier_initializer(),
+            #     activation=tf.nn.tanh,
+            #     name='hidden_layer_0'
+            # )
 
             # self.hidden_layer_1 = tf.layers.dense(
             #     inputs=self.hidden_layer_0,
@@ -100,9 +99,8 @@ class Agent_PG(Agent):
             self.actions_value_prediction = tf.layers.dense(
                 inputs=self.observations,
                 units=self.n_actions,
+                kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.00001),
                 activation=None,
-                kernel_initializer=tf.random_normal_initializer(mean=0, stddev=0.0001),
-                bias_initializer=tf.constant_initializer(0.0),
                 name='actions_probability_prediction'
             )
 
@@ -141,12 +139,13 @@ class Agent_PG(Agent):
         self.saver = tf.train.Saver()
         self.summary_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
+
     def init_game_setting(self):
         pass
 
-    previous_ball = (0.5, 0.5)
-    previous_opponent = 0.5
-    previous_player = 0.5
+    previous_ball = (80, 64)
+    previous_opponent = 80
+    previous_player = 64
 
     @staticmethod
     def simplify_observation(observation):
@@ -157,7 +156,7 @@ class Agent_PG(Agent):
             reduced observation
         """
         observation_ = observation[35:194, 16:144]
-        observation_ = observation_[::2, ::2]
+        # observation_ = observation_[::2, ::2]
         # plt.imshow(observation_)
         # plt.pause(0.00000000001)
         # print(observation_.shape)
@@ -178,13 +177,13 @@ class Agent_PG(Agent):
             # plt.imshow(observation_)
             # plt.pause(0.000001)
             reduced_observation = np.array(
-                [opponent[0][0] / 80, player[0][0] / 80, ball[0][0] / 80, ball[1][0] / 64,
+                [opponent[0][0], player[0][0], ball[0][0], ball[1][0],
                  Agent_PG.previous_opponent, Agent_PG.previous_player, Agent_PG.previous_ball[0],
                  Agent_PG.previous_ball[1]])
 
-            Agent_PG.previous_ball = (ball[0][0] / 80, ball[1][0] / 64)
-            Agent_PG.previous_opponent = opponent[0][0] / 80
-            Agent_PG.previous_player = player[0][0] / 80
+            Agent_PG.previous_ball = (ball[0][0], ball[1][0])
+            Agent_PG.previous_opponent = opponent[0][0]
+            Agent_PG.previous_player = player[0][0]
 
             return reduced_observation
         except Exception as e:
@@ -287,11 +286,11 @@ class Agent_PG(Agent):
             observations = np.vstack(observations)
             actions = np.array(actions, dtype=int)
 
-            # tvars = tf.trainable_variables()
-            # tvars_vals = self.sess.run(tvars)
+            tvars = tf.trainable_variables()
+            tvars_vals = self.sess.run(tvars)
             # #
-            # for var, val in zip(tvars, tvars_vals):
-            #     print(var.name, val)
+            for var, val in zip(tvars, tvars_vals):
+                print(var.name, sci_stats.describe(val.flatten()))
 
             gradients, _, summary = self.sess.run(
                 [self.gradients, self.model_update, self.merged_summary], feed_dict={
@@ -301,11 +300,12 @@ class Agent_PG(Agent):
                     self.rewards: np.sum(rewards),
                     self.rounds: n_rounds
                 })
-            # print("gradients", gradients)
+            print("gradients", sci_stats.describe(gradients[0].flatten()))
             self.summary_writer.add_summary(summary, i)
             self.saver.save(self.sess, self.checkpoints_path)
             Agent_PG.i = 0
-            print("=============================================")
+            # print("=============================================")
+            # exit()
 
     i = 0
 
