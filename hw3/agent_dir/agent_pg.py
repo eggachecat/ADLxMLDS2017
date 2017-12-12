@@ -219,7 +219,7 @@ class Agent_PG(Agent):
 
             discounted_rewards -= np.mean(discounted_rewards)
             discounted_rewards /= np.std(discounted_rewards)
-            print(discounted_rewards)
+            # print(discounted_rewards)
 
             print("Episode {}".format(i))
             print("Finished after {} timesteps".format(n_rounds))
