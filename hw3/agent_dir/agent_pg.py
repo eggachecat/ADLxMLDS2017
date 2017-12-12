@@ -44,7 +44,7 @@ class Agent_PG(Agent):
         else:
             self.dim_observation = [self.env.observation_space.shape[0]]
 
-        self.n_actions = self.env.action_space.n
+        self.n_actions = 3
         print(self.n_actions, self.dim_observation)
         self.reward_discount_date = 0.95
         self.learning_rate = 1e-4
@@ -199,7 +199,7 @@ class Agent_PG(Agent):
                 action = self.make_action_train(observation)
                 actions.append(action)
 
-                observation, reward, done, info = self.env.step(action)
+                observation, reward, done, info = self.env.step(action + 1)
 
                 if self.env_name is None or self.env_name == 'Pong-v0':
                     observation = self.simplify_observation(observation)
@@ -269,7 +269,8 @@ class Agent_PG(Agent):
             # print(np.max(credit_for_reward), np.min(credit_for_reward))
 
             self.summary_writer.add_summary(summary, i)
-            self.saver.save(self.sess, self.checkpoints_path)
+            if i % 100 == 0:
+                self.saver.save(self.sess, self.checkpoints_path, i)
             Agent_PG.previous_frame = None
             Agent_PG.i = 0
 
