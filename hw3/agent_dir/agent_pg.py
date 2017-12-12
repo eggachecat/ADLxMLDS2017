@@ -104,7 +104,7 @@ class Agent_PG(Agent):
             )
 
             self.actions_value_prediction = tf_layers.fully_connected(
-                inputs=self.flat_layer,
+                inputs=self.dense_layer,
                 num_outputs=self.n_actions,
                 activation_fn=None,
             )
