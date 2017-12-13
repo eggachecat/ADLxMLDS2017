@@ -49,9 +49,16 @@ class DQN:
                  target_net_update_freq=1000,
                  gamma=0.0001,
                  epsilon=0.01,
+                 epsilon_increment=0.001,
+                 epsilon_max=1,
                  learning_rate=1e-4,
                  n_hidden_units=100):
-        self.memory_database = []
+        self.memory_database = {
+            "current_states": [],
+            "next_states": [],
+            "rewards": [],
+            "actions": []
+        }
         self.memory_size = memory_size
         self.memory_ctr = 0
 
@@ -65,13 +72,16 @@ class DQN:
         self.learn_step_counter = 0
         self.target_net_update_freq = target_net_update_freq
 
+        self.epsilon_increment = epsilon_increment
+        self.epsilon_max = epsilon_max
+
         with tf.variable_scope("eval_net") as scope:
             self.current_states = tf.placeholder(tf.float32, [None] + state_dim, name='current_states')
-            self.eval_net = QNetwork(self.current_states, n_actions, scope)
+            self.eval_net = QNetwork(self.current_states, n_actions, scope, n_hidden_units)
 
         with tf.variable_scope("target_net") as scope:
             self.next_states = tf.placeholder(tf.float32, [None] + state_dim, name='next_states')
-            self.target_net = QNetwork(self.next_states, n_actions, scope)
+            self.target_net = QNetwork(self.next_states, n_actions, scope, n_hidden_units)
 
         self.rewards = tf.placeholder(tf.float32, [None, ], name='rewards')  # input Reward
         self.actions = tf.placeholder(tf.int32, [None, ], name='actions')  # input Action
@@ -98,75 +108,46 @@ class DQN:
         self.sess = tf.Session()
 
     def save_experience(self, current_state, action, reward, next_state):
-        index = self.memory_ctr % self.memory_size
-        self.memory_database[index, :] = np.hstack((current_state, [action, reward], next_state))
+        # index = self.memory_ctr % self.memory_size
+        # self.memory_database[index, :] = np.hstack((current_state, [action, reward], next_state))
+
+        self.memory_database["current_states"].append(current_state)
+        self.memory_database["next_states"].append(next_state)
+        self.memory_database["actions"].append(action)
+        self.memory_database["rewards"].append(reward)
+
         self.memory_ctr += 1
 
-    def choose_action(self, state):
-        state = state[np.newaxis, :]
+    def make_action(self, state):
 
+        state = state[np.newaxis, :]
         if np.random.uniform() < self.epsilon:
-            actions_value = self.sess.run(self.eval_net.q_values, feed_dict={self.s: state})
+            actions_value = self.sess.run(self.eval_net.q_values, feed_dict={self.current_states: state})
             action = np.argmax(actions_value)
         else:
             action = np.random.randint(0, self.n_actions)
         return action
 
     def learn(self):
-
+        # check to replace target parameters
         if self.learn_step_counter % self.target_net_update_freq == 0:
             self.sess.run(self.update_target_net_op)
             print('\ntarget_params_replaced\n')
 
         # sample batch memory from all memory
         if self.memory_ctr > self.memory_size:
-            sample_index = np.random.choice(self.memory_size, size=self.batch_size)
+            batch_indices = np.random.choice(self.memory_size, size=self.batch_size)
         else:
-            sample_index = np.random.choice(self.memory_ctr, size=self.batch_size)
-        batch_memory = self.memory_database[sample_index, :]
+            batch_indices = np.random.choice(self.memory_ctr, size=self.batch_size)
 
-        q_next, q_eval = self.sess.run(
-            [self.target_net.q_values, self.eval_net.q_values],
+        _, cost = self.sess.run(
+            [self.train_op, self.loss],
             feed_dict={
-                self.next_states: batch_memory[:, -self.n_features:],  # fixed params
-                self.current_states: batch_memory[:, :self.n_features],  # newest params
+                self.current_states: self.memory_database["current_states"][batch_indices],
+                self.actions: self.memory_database["current_states"][batch_indices],
+                self.rewards: self.memory_database["current_states"][batch_indices],
+                self.next_states: self.memory_database["current_states"][batch_indices],
             })
-
-        # change q_target w.r.t q_eval's action
-        q_target = q_eval.copy()
-
-        batch_index = np.arange(self.batch_size, dtype=np.int32)
-        eval_act_index = batch_memory[:, self.n_features].astype(int)
-        reward = batch_memory[:, self.n_features + 1]
-
-        q_target[batch_index, eval_act_index] = reward + self.gamma * np.max(q_next, axis=1)
-
-        """
-        For example in this batch I have 2 samples and 3 actions:
-        q_eval =
-        [[1, 2, 3],
-         [4, 5, 6]]
-        q_target = q_eval =
-        [[1, 2, 3],
-         [4, 5, 6]]
-        Then change q_target with the real q_target value w.r.t the q_eval's action.
-        For example in:
-            sample 0, I took action 0, and the max q_target value is -1;
-            sample 1, I took action 2, and the max q_target value is -2:
-        q_target =
-        [[-1, 2, 3],
-         [4, 5, -2]]
-        So the (q_target - q_eval) becomes:
-        [[(-1)-(1), 0, 0],
-         [0, 0, (-2)-(6)]]
-        We then backpropagate this error w.r.t the corresponding action to network,
-        leave other action as error=0 cause we didn't choose it.
-        """
-
-        # train eval network
-        _, cost = self.sess.run([self.train_op, self.loss],
-                                feed_dict={self.current_states: batch_memory[:, :self.n_features],
-                                           self.q_value_target: q_target})
 
         # increasing epsilon
         self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max
@@ -182,13 +163,13 @@ class Agent_DQN(Agent):
 
         super(Agent_DQN, self).__init__(env)
 
+        self.n_episode = 100
+
         if args.test_dqn:
             # you can load your model here
             print('loading trained model')
 
-            ##################
-            # YOUR CODE HERE #
-            ##################
+        self.dqn = DQN()
 
     def init_game_setting(self):
         """
@@ -206,18 +187,27 @@ class Agent_DQN(Agent):
         """
         Implement your training algorithm here
         """
-        ##################
-        # YOUR CODE HERE #
-        ##################
-        print(self.env.action_space)
-        print(self.env.observation_space)
-        observation = self.env.reset()
-        self.env.env.render()
 
-        shape = observation.shape
-        observation_ = np.reshape(observation, (shape[2], shape[0], shape[1]))
-        for i in range(observation_.shape[0]):
-            np.savetxt("{}.csv".format(i), np.asarray(observation_[i]))
+        for i in range(self.n_episode):
+
+            n_rounds = 0
+
+            observation = self.env.reset()
+
+            done = False
+
+            while not done:
+                observation_ = observation
+
+                action = self.dqn.make_action(observation_)
+
+                observation, reward, done, info = self.env.step(action)
+                self.dqn.save_experience(observation_, action, reward, observation)
+
+                n_rounds += 1
+
+                if n_rounds % 10 == 0:
+                    self.dqn.learn()
 
     def make_action(self, observation, test=True):
         """
