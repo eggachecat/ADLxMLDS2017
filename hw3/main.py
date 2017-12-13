@@ -35,6 +35,11 @@ def run(args):
         env = Environment(env_name, args)
         from agent_dir.agent_pg import Agent_PG
         agent = Agent_PG(env, args)
+        if args.debug:
+            print("debug")
+            agent.debug_train()
+        else:
+            agent.train()
 
     if args.train_dqn:
         env_name = args.env_name or 'BreakoutNoFrameskip-v4'
@@ -42,11 +47,11 @@ def run(args):
         from agent_dir.agent_dqn import Agent_DQN
         agent = Agent_DQN(env, args)
 
-    if args.debug:
-        print("debug")
-        agent.debug_train()
-    else:
-        agent.train()
+        if args.debug:
+            print("debug")
+            agent.debug_train()
+        else:
+            agent.train()
 
     if args.test_pg:
         env = Environment('Pong-v0', args, test=True)

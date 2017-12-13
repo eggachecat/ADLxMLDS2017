@@ -32,9 +32,7 @@ class Agent_PG(Agent):
         super(Agent_PG, self).__init__(env)
         self.exp_id = str(int(time.time())) if exp_id is None else exp_id
 
-        if args.test_pg:
-            # you can load your model here
-            print('loading trained model')
+
 
         self.env_name = args.env_name
         self.args = args
@@ -46,7 +44,7 @@ class Agent_PG(Agent):
 
         self.n_actions = 3
         print(self.n_actions, self.dim_observation)
-        self.reward_discount_date = 0.95
+        self.reward_discount_date = 0.99
         self.learning_rate = 1e-4
         self.n_episode = 1000000
         self.n_hidden_units = 128
@@ -140,10 +138,18 @@ class Agent_PG(Agent):
         self.merged_summary = tf.summary.merge_all()
 
         self.sess = tf.Session()
-        self.sess.run(tf.global_variables_initializer())
-
         self.saver = tf.train.Saver()
-        self.summary_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
+
+        if args.test_pg:
+            # you can load your model here
+            print('loading trained model')
+            self.saver.restore(self.sess, "./outputs/1513137911/model/model.ckpt-500")
+        else:
+            pass
+            self.sess.run(tf.global_variables_initializer())
+            self.saver.restore(self.sess, "./outputs/1513137911/model/model.ckpt-500")
+
+            self.summary_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
     def init_game_setting(self):
         """
@@ -291,6 +297,6 @@ class Agent_PG(Agent):
 
         gambler = self.sess.run(self.approximate_action_probability,
                                 feed_dict={self.observations: observation[np.newaxis, :]})
-        action = np.random.choice(range(gambler.shape[1]), p=gambler.ravel())
+        action = np.argmax(gambler)
 
-        return action
+        return action + 1
