@@ -5,9 +5,10 @@ You DO NOT need to upload this file
 
 """
 import gym
+import gym_maze
+
 import numpy as np
 from atari_wrapper import make_wrap_atari
-
 
 class Environment(object):
     def __init__(self, env_name, args, atari_wrapper=False, test=False):
@@ -17,10 +18,8 @@ class Environment(object):
         else:
             self.env = gym.make(env_name)
 
-        self.env.seed(1)
-        self.env = self.env.unwrapped
-
         self.action_space = self.env.action_space
+        print(self.action_space)
         self.observation_space = self.env.observation_space
 
         self.do_render = args.do_render
@@ -48,7 +47,8 @@ class Environment(object):
 
         return np.array(observation)
 
-    def step(self, action):
+
+    def step(self,action):
         '''
         When running dqn:
             observation: np.array
@@ -77,11 +77,14 @@ class Environment(object):
 
         return np.array(observation), reward, done, info
 
+
     def get_action_space(self):
         return self.action_space
 
+
     def get_observation_space(self):
         return self.observation_space
+
 
     def get_random_action(self):
         return self.action_space.sample()
