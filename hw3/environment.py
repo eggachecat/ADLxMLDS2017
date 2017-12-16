@@ -5,8 +5,6 @@ You DO NOT need to upload this file
 
 """
 import gym
-import gym_maze
-
 import numpy as np
 from atari_wrapper import make_wrap_atari
 
@@ -19,7 +17,6 @@ class Environment(object):
             self.env = gym.make(env_name)
 
         self.action_space = self.env.action_space
-        print(self.action_space)
         self.observation_space = self.env.observation_space
 
         self.do_render = args.do_render

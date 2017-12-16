@@ -32,15 +32,9 @@ class Agent_PG(Agent):
         super(Agent_PG, self).__init__(env)
         self.exp_id = str(int(time.time())) if exp_id is None else exp_id
 
-
-
-        self.env_name = args.env_name
         self.args = args
 
-        if self.env_name is None or self.env_name == 'Pong-v0':
-            self.dim_observation = [80, 80, 1]
-        else:
-            self.dim_observation = [self.env.observation_space.shape[0]]
+        self.dim_observation = [80, 80, 1]
 
         self.n_actions = 3
         print(self.n_actions, self.dim_observation)
@@ -143,11 +137,11 @@ class Agent_PG(Agent):
         if args.test_pg:
             # you can load your model here
             print('loading trained model')
-            self.saver.restore(self.sess, "./outputs/1513137911/model/model.ckpt-500")
+            self.saver.restore(self.sess, "./models/pg/model.ckpt")
         else:
             pass
             self.sess.run(tf.global_variables_initializer())
-            self.saver.restore(self.sess, "./outputs/1513137911/model/model.ckpt-500")
+            self.saver.restore(self.sess, "./models/pg/model.ckpt")
 
             self.summary_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
@@ -194,8 +188,7 @@ class Agent_PG(Agent):
             n_rounds = 0
 
             observation = self.env.reset()
-            if self.env_name is None or self.env_name == 'Pong-v0':
-                observation = self.simplify_observation(observation)
+            observation = self.simplify_observation(observation)
 
             done = False
 
@@ -207,8 +200,7 @@ class Agent_PG(Agent):
 
                 observation, reward, done, info = self.env.step(action + 1)
 
-                if self.env_name is None or self.env_name == 'Pong-v0':
-                    observation = self.simplify_observation(observation)
+                observation = self.simplify_observation(observation)
 
                 rewards.append(reward)
                 n_rounds += 1
@@ -218,7 +210,7 @@ class Agent_PG(Agent):
             discounted_rewards = np.zeros_like(rewards)
             reward_ = 0
             for t in reversed(range(0, len(rewards))):
-                if rewards[t] != 0 and (self.env_name == 'Pong-v0' or self.env_name is None):
+                if rewards[t] != 0:
                     reward_ = 0
                 reward_ = reward_ * self.reward_discount_date + rewards[t]
                 discounted_rewards[t] = reward_
