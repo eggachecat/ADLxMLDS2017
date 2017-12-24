@@ -15,6 +15,7 @@ class BaseDiscriminator:
         self.G_sample = G_sample
         self.R_sample = R_sample
         self.C_sample = C_sample
+        self.C_sample = C_sample
         self.R_prob = None
         self.G_prob = None
 

@@ -5,10 +5,24 @@ simple_settings = {
         "is_deconv": True,
         "convs": [{
             "conv": {
-                "num_outputs": 1,
+                "num_outputs": 256,
                 "kernel_size": 3,
-                "stride": [3, 3],
+                "stride": [4, 4],
                 "activation_fn": tf.nn.relu,
+            }
+        }, {
+            "conv": {
+                "num_outputs": 100,
+                "kernel_size": 3,
+                "stride": [4, 4],
+                "activation_fn": tf.nn.relu,
+            }
+        }, {
+            "conv": {
+                "num_outputs": 3,
+                "kernel_size": 3,
+                "stride": [4, 4],
+                "activation_fn": tf.nn.sigmoid,
             }
         }]
     },
@@ -17,35 +31,34 @@ simple_settings = {
         "convs": [{
             "conv": {
                 "num_outputs": 32,
-                "kernel_size": [2, 2],
+                "kernel_size": [4, 4],
+                "stride": [2, 2],
                 "padding": "same",
                 "activation_fn": tf.nn.relu,
-            },
-            "pool": {
-                "kernel_size": 1,
-                "stride": 1
             }
         }, {
             "conv": {
                 "num_outputs": 32,
-                "kernel_size": [2, 2],
+                "kernel_size": [4, 4],
+                "stride": [2, 2],
                 "padding": "same",
                 "activation_fn": tf.nn.relu,
-            },
-            "pool": {
-                "kernel_size": 1,
-                "stride": 1
             }
         }, {
             "conv": {
                 "num_outputs": 32,
-                "kernel_size": [2, 2],
+                "kernel_size": [4, 4],
+                "stride": [2, 2],
                 "padding": "same",
                 "activation_fn": tf.nn.relu,
-            },
-            "pool": {
-                "kernel_size": 1,
-                "stride": 1
+            }
+        }, {
+            "conv": {
+                "num_outputs": 32,
+                "kernel_size": [4, 4],
+                "stride": [2, 2],
+                "padding": "same",
+                "activation_fn": tf.nn.relu,
             }
         }],
         "dense": [{
