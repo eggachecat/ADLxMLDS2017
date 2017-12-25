@@ -6,7 +6,7 @@ simple_settings = {
         "optimizer": {
             "type": tf.train.AdamOptimizer,
             "parameters": {
-                "learning_rate": 0.0001
+                "learning_rate": 0.0002
             }
         },
         "convs": [{

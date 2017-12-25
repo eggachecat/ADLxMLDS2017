@@ -233,7 +233,7 @@ def main(exp_id=str(time.time())):
                     tf_r_sample_neg: helper_images / 255
                 }
 
-                if batch_ctr % 25 == 0:
+                if batch_ctr % 5 == 0:
                     print("Before train summary:")
                     print_training_detail(sess, gan, feed_dict)
 
@@ -241,7 +241,7 @@ def main(exp_id=str(time.time())):
                 sess.run([gan.D_train, gan.G_train], feed_dict=feed_dict)
                 summary_writer.add_summary(summary, global_step)
 
-                if batch_ctr % 25 == 0:
+                if batch_ctr % 5 == 0:
                     print("After train summary:")
                     print_training_detail(sess, gan, feed_dict)
                     print("--------------------------------------------------")
