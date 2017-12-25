@@ -196,6 +196,8 @@ def main(exp_id=str(time.time())):
             ],
             max_value=len(images) // batch_size)
 
+        saver.save(sess, checkpoints_path, global_step)
+
         while True:
             try:
                 images_, ids_ = sess.run(next_element)
@@ -248,7 +250,7 @@ def main(exp_id=str(time.time())):
                 global_step += 1
 
             except tf.errors.OutOfRangeError:
-                noise = np.random.rand(batch_size, 1, 1, z_dim)
+                noise = np.random.rand(5, 1, 1, z_dim)
                 hair_code = global_hairs_encoder.transform(['orange', 'white', 'aqua', 'gray', 'green'])
                 eyes_code = global_eyes_encoder.transform(['gray', 'black', 'orange', 'pink', 'yellow'])
                 conditions = np.concatenate((hair_code, eyes_code), axis=1)
@@ -258,7 +260,7 @@ def main(exp_id=str(time.time())):
 
                 })
                 for i in range(G_samples.shape[0]):
-                    scipy.misc.imsave("{}/faces_resized/{}.jpg".format(images_path, i), G_samples[i])
+                    scipy.misc.imsave("{}/{}-{}.jpg".format(images_path, epoch, i), G_samples[i])
 
                 saver.save(sess, checkpoints_path, global_step)
                 break
