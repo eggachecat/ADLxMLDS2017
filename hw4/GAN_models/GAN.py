@@ -4,18 +4,12 @@ import tensorflow.contrib.layers as tf_layers
 
 
 class Generator:
-    def __init__(self, settings, Z_sample, C_sample=None):
+    def __init__(self, settings, Z_sample, C_sample):
         self.settings = settings
         self.Z_sample = Z_sample
         self.C_sample = C_sample
-        self.G_sample = None
 
-        if self.C_sample is not None:
-            self.inputs = tf.concat([self.Z_sample, self.C_sample], axis=3)
-        else:
-            self.inputs = self.Z_sample
-
-        print(self.inputs)
+        self.inputs = tf.concat([self.Z_sample, self.C_sample], axis=3)
 
         self.G_sample = self.__build_net(self.inputs, self.settings, "generator")
 
@@ -74,17 +68,17 @@ class Generator:
 
 
 class Discriminator:
-    def __init__(self, settings, G_sample, R_sample, C_sample, R_sample_neg, C_sample_neg, C_dim=3):
+    def __init__(self, settings, generator, R_sample, C_sample, R_sample_neg, C_sample_neg, C_dim=3):
 
         self.C_dim = C_dim
         self.settings = settings
-        self.G_sample = G_sample
+        self.generator = generator
         self.R_sample = R_sample
         self.C_sample = C_sample
         self.R_sample_neg = R_sample_neg
         self.C_sample_neg = C_sample_neg
 
-        self.G_prob = self._build_net(self.G_sample, self.C_sample, "discriminator")
+        self.G_prob = self._build_net(self.generator.G_sample, self.C_sample, "discriminator")
         self.R_prob = self._build_net(self.R_sample, self.C_sample, "discriminator", reuse=True)
         self.R_prob_t1 = self._build_net(self.R_sample, self.C_sample_neg, "discriminator", reuse=True)
         self.R_prob_t2 = self._build_net(self.R_sample_neg, self.C_sample, "discriminator", reuse=True)
@@ -113,65 +107,74 @@ class Discriminator:
 
 class GAN:
     def __init__(self, settings, generator, discriminator):
+        self.settings = settings
         self.generator = generator
         self.discriminator = discriminator
 
-        self.settings = settings
-        self.generator = None
-        self.discriminator = None
-
         self.D_loss, self.G_loss, \
-        self.D_acc_r, self.D_acc_r_t1, \
-        self.D_acc_r_t2, self.D_acc_G = self.make_loss(
+        self.D_acc_R, self.D_acc_R_t1, \
+        self.D_acc_R_t2, self.D_acc_G = self.make_loss(
             self.discriminator.R_prob,
             self.discriminator.R_prob_t1,
             self.discriminator.R_prob_t2,
             self.discriminator.G_prob)
 
-        self.D_train, self.G_train = self.make_train(self.D_loss, self.G_loss)
+
+
+        self.D_train, self.G_train, self.D_train_gradients, self.G_train_gradients = self.make_train(self.D_loss,
+                                                                                                     self.G_loss)
 
     def make_loss(self, R_prob, R_prob_t1, R_prob_t2, G_prob):
         D_loss_r = tf.reduce_mean(
             tf.nn.sigmoid_cross_entropy_with_logits(logits=R_prob, labels=tf.ones_like(R_prob),
-                                                    name="D_loss_real_XE_1"), 1, name="D_loss_real")
+                                                    name="D_loss_real_XE_1"), None, name="D_loss_real")
 
         D_loss_r_t1 = tf.reduce_mean(
-            tf.nn.sigmoid_cross_entropy_with_logits(logits=R_prob_t1, labels=tf.ones_like(R_prob_t1),
-                                                    name="D_loss_real_t1_XE_1"), 1, name="D_loss_real_t1")
+            tf.nn.sigmoid_cross_entropy_with_logits(logits=R_prob_t1, labels=tf.zeros_like(R_prob_t1),
+                                                    name="D_loss_real_t1_XE_0"), None, name="D_loss_real_t1")
 
         D_loss_r_t2 = tf.reduce_mean(
-            tf.nn.sigmoid_cross_entropy_with_logits(logits=R_prob_t2, labels=tf.ones_like(R_prob_t2),
-                                                    name="D_loss_real_t2_XE_1"), 1, name="D_loss_real_t2")
+            tf.nn.sigmoid_cross_entropy_with_logits(logits=R_prob_t2, labels=tf.zeros_like(R_prob_t2),
+                                                    name="D_loss_real_t2_XE_0"), None, name="D_loss_real_t2")
         D_loss_G = tf.reduce_mean(
             tf.nn.sigmoid_cross_entropy_with_logits(logits=G_prob, labels=tf.zeros_like(G_prob),
-                                                    name="D_loss_fake_XE_0"), 1, name="D_loss_fake")
+                                                    name="D_loss_fake_XE_0"), None, name="D_loss_fake")
 
         D_loss = D_loss_r + D_loss_r_t1 + D_loss_r_t2 + D_loss_G
 
-        D_acc_r = tf.reduce_mean(tf.cast(tf.greater(R_prob, 0.5 * tf.ones_like(R_prob)), tf.float32))
-        D_acc_r_t1 = tf.reduce_mean(tf.cast(tf.greater(R_prob_t1, 0.5 * tf.ones_like(R_prob_t1)), tf.float32))
-        D_acc_r_t2 = tf.reduce_mean(tf.cast(tf.greater(R_prob_t2, 0.5 * tf.ones_like(R_prob_t2)), tf.float32))
-
+        D_acc_R = tf.reduce_mean(tf.cast(tf.greater(R_prob, 0.5 * tf.ones_like(R_prob)), tf.float32))
+        D_acc_R_t1 = tf.reduce_mean(tf.cast(tf.less(R_prob_t1, 0.5 * tf.ones_like(R_prob_t1)), tf.float32))
+        D_acc_R_t2 = tf.reduce_mean(tf.cast(tf.less(R_prob_t2, 0.5 * tf.ones_like(R_prob_t2)), tf.float32))
         D_acc_G = tf.reduce_mean(tf.cast(tf.less(G_prob, 0.5 * tf.ones_like(G_prob)), tf.float32))
 
         G_loss = tf.reduce_mean(
-            tf.nn.sigmoid_cross_entropy_with_logits(logits=G_prob, labels=tf.ones_like(G_prob), name="G_loss_XE_0"), 1,
+            tf.nn.sigmoid_cross_entropy_with_logits(logits=G_prob, labels=tf.ones_like(G_prob), name="G_loss_XE_0"),
+            None,
             name="D_loss_G")
 
-        return D_loss, G_loss, D_acc_r, D_acc_r_t1, D_acc_r_t2, D_acc_G
+        print(D_loss.shape, G_loss.shape)
+
+        return D_loss, G_loss, D_acc_R, D_acc_R_t1, D_acc_R_t2, D_acc_G
 
     def make_train(self, D_loss, G_loss):
-        D_optimizer = self.settings["Discriminator"]["optimizer"]["type"]
-        D_learning_rate = self.settings["Discriminator"]["optimizer"]["learning_rate"]
-        D_train = D_optimizer(D_learning_rate).minimize(
-            D_loss, var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Discriminator"))
+        D_optimizer = self.settings["discriminator"]["optimizer"]["type"]
+        D_train = D_optimizer(**self.settings["discriminator"]["optimizer"]["parameters"]).minimize(
+            D_loss, var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="discriminator"))
 
-        G_optimizer = self.settings["Generator"]["optimizer"]["type"]
-        G_learning_rate = self.settings["Generator"]["optimizer"]["learning_rate"]
-        G_train = G_optimizer(G_learning_rate).minimize(
-            D_loss, var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator"))
+        D_train_gradients = tf.gradients(D_loss,
+                                         tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="discriminator"))
 
-        return D_train, G_train
+        print(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="discriminator"))
+
+        G_optimizer = self.settings["generator"]["optimizer"]["type"]
+        G_train = G_optimizer(**self.settings["generator"]["optimizer"]["parameters"]).minimize(
+            G_loss, var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="generator"))
+
+        G_train_gradients = tf.gradients(G_loss,
+                                         tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="generator"))
+        print(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="generator"))
+
+        return D_train, G_train, D_train_gradients, G_train_gradients
 
 
 class WGAN:

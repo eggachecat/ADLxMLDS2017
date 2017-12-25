@@ -3,6 +3,12 @@ import tensorflow as tf
 simple_settings = {
     "generator": {
         "is_deconv": True,
+        "optimizer": {
+            "type": tf.train.AdamOptimizer,
+            "parameters": {
+                "learning_rate": 0.0001
+            }
+        },
         "convs": [{
             "conv": {
                 "num_outputs": 256,
@@ -28,6 +34,12 @@ simple_settings = {
     },
     "discriminator": {
         "is_deconv": False,
+        "optimizer": {
+            "type": tf.train.AdamOptimizer,
+            "parameters": {
+                "learning_rate": 0.0001
+            }
+        },
         "convs": [{
             "conv": {
                 "num_outputs": 32,
@@ -62,8 +74,8 @@ simple_settings = {
             }
         }],
         "dense": [{
-            "num_outputs": 2,
-            "activation_fn": tf.nn.softmax,
+            "num_outputs": 1,
+            "activation_fn": None  ,
         }]
     },
 }
