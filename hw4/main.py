@@ -237,8 +237,8 @@ def main(exp_id=str(time.time())):
                     print("Before train summary:")
                     print_training_detail(sess, gan, feed_dict)
 
-                summary, __, ___ = sess.run([merged_summary, gan.D_train, gan.G_train], feed_dict=feed_dict)
-
+                summary = sess.run(merged_summary, feed_dict=feed_dict)
+                sess.run([gan.D_train, gan.G_train], feed_dict=feed_dict)
                 summary_writer.add_summary(summary, global_step)
 
                 if batch_ctr % 25 == 0:
