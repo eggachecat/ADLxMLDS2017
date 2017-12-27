@@ -16,7 +16,7 @@ np.random.seed(0)
 
 tf.set_random_seed(0)
 
-n_epoch = 500
+n_epoch = 1000
 n_D_train = 5
 n_G_train = 1
 
@@ -82,10 +82,10 @@ def ids2conditions(tags_obj, ids):
 
 
 def print_training_detail(sess, gan, feed_dict):
-    G_prob, R_prob, D_loss, G_loss, D_acc_R, D_acc_R_t1, D_acc_R_t2, D_acc_G = sess.run(
+    G_prob, R_prob, D_loss, G_loss, D_acc_R, D_acc_R_t1, D_acc_G = sess.run(
         [gan.discriminator.G_prob, gan.discriminator.R_prob,
          gan.D_loss, gan.G_loss,
-         gan.D_acc_R, gan.D_acc_R_t1, gan.D_acc_R_t2, gan.D_acc_G],
+         gan.D_acc_R, gan.D_acc_R_t1, gan.D_acc_G],
         feed_dict=feed_dict)
 
     # print("\tdiscriminator")
@@ -100,14 +100,13 @@ def print_training_detail(sess, gan, feed_dict):
     print("\tD_acc_G:", D_acc_G)
     print("\tD_acc_R:", D_acc_R)
     print("\tD_acc_R_t1:", D_acc_R_t1)
-    print("\tD_acc_R_t2:", D_acc_R_t2)
 
 
 import os
 import time
 
 
-def main(exp_id=str(time.time())):
+def main(exp_id=str(time.time()), continue_train=True):
     base_bath = "./outputs/{}".format(exp_id)
     if not os.path.exists(base_bath):
         os.makedirs(base_bath)
@@ -128,26 +127,25 @@ def main(exp_id=str(time.time())):
     with open("./tags.json") as fp:
         _tags_obj = json.load(fp)
 
-    ctr = 0
     tags_obj = dict()
     for key in _tags_obj.keys():
         tags_obj[int(key)] = _tags_obj[key]
-        if "hair" in _tags_obj[key] and "eyes" in _tags_obj[key]:
-            ctr += 1
 
-    batch_size = 256
+    global_batch_size = 128
 
     all_ids = list(tags_obj.keys())
+
     id2indices = dict([(id_, i) for i, id_ in enumerate(all_ids)])
+
     #####################################################################################################
     dataset = tf_data_api.Dataset.from_tensor_slices((images, ids))
-    dataset = dataset.batch(batch_size)
+    dataset = dataset.batch(global_batch_size)
     iterator = dataset.make_initializable_iterator()
     next_element = iterator.get_next()
     #####################################################################################################
     img_width = 64
     img_height = 64
-    z_dim = 100
+    z_dim = 25
     condition_dim = 23
 
     settings = simple_settings
@@ -174,16 +172,16 @@ def main(exp_id=str(time.time())):
     tf.summary.scalar("G_loss", tf.reduce_sum(gan.G_loss))
     tf.summary.scalar("D_acc_R", gan.D_acc_R)
     tf.summary.scalar("D_acc_R_t1", gan.D_acc_R_t1)
-    tf.summary.scalar("D_acc_R_t2", gan.D_acc_R_t2)
     tf.summary.scalar("D_acc_G", gan.D_acc_G)
     merged_summary = tf.summary.merge_all()
 
     sess = tf.Session()
+
     sess.run(tf.global_variables_initializer())
     global_step = 0
 
     for epoch in range(n_epoch):
-        batch_size = 256
+        batch_size = global_batch_size
 
         sess.run(iterator.initializer)
         batch_ctr = 0
@@ -218,7 +216,7 @@ def main(exp_id=str(time.time())):
                         helper_ids.append(_help_id[0])
                         ctr += 1
 
-                helper_images = np.array([images[id2indices[_id]] for _id in helper_ids])
+                # helper_images = np.array([images[id2indices[_id]] for _id in helper_ids])
 
                 conditions = conditions.reshape(batch_size, 1, 1, condition_dim)
                 helper_conditions = np.array(helper_conditions).reshape(batch_size, 1, 1, condition_dim)
@@ -227,21 +225,20 @@ def main(exp_id=str(time.time())):
 
                 feed_dict = {
                     tf_z_sample: noise,
-                    tf_r_sample: images_ / 255,
+                    tf_r_sample: images_ / 127.5 - 1,
                     tf_c_sample: conditions,
-                    tf_c_sample_neg: helper_conditions,
-                    tf_r_sample_neg: helper_images / 255
+                    tf_c_sample_neg: helper_conditions
                 }
 
-                if batch_ctr % 5 == 0:
-                    print("Before train summary:")
+                if batch_ctr % 10 == 0:
+                    print("\nBefore train summary:")
                     print_training_detail(sess, gan, feed_dict)
 
                 summary = sess.run(merged_summary, feed_dict=feed_dict)
                 sess.run([gan.D_train, gan.G_train], feed_dict=feed_dict)
                 summary_writer.add_summary(summary, global_step)
 
-                if batch_ctr % 5 == 0:
+                if batch_ctr % 10 == 0:
                     print("After train summary:")
                     print_training_detail(sess, gan, feed_dict)
                     print("--------------------------------------------------")

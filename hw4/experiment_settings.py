@@ -6,7 +6,7 @@ simple_settings = {
         "optimizer": {
             "type": tf.train.AdamOptimizer,
             "parameters": {
-                "learning_rate": 0.0002
+                "learning_rate": 0.01
             }
         },
         "convs": [{
@@ -28,7 +28,7 @@ simple_settings = {
                 "num_outputs": 3,
                 "kernel_size": 3,
                 "stride": [4, 4],
-                "activation_fn": tf.nn.sigmoid,
+                "activation_fn": tf.nn.tanh,
             }
         }]
     },
@@ -37,12 +37,12 @@ simple_settings = {
         "optimizer": {
             "type": tf.train.AdamOptimizer,
             "parameters": {
-                "learning_rate": 0.0001
+                "learning_rate": 0.01
             }
         },
         "convs": [{
             "conv": {
-                "num_outputs": 32,
+                "num_outputs": 64,
                 "kernel_size": [4, 4],
                 "stride": [2, 2],
                 "padding": "same",
@@ -50,7 +50,7 @@ simple_settings = {
             }
         }, {
             "conv": {
-                "num_outputs": 32,
+                "num_outputs": 128,
                 "kernel_size": [4, 4],
                 "stride": [2, 2],
                 "padding": "same",
@@ -58,7 +58,7 @@ simple_settings = {
             }
         }, {
             "conv": {
-                "num_outputs": 32,
+                "num_outputs": 256,
                 "kernel_size": [4, 4],
                 "stride": [2, 2],
                 "padding": "same",
@@ -66,7 +66,7 @@ simple_settings = {
             }
         }, {
             "conv": {
-                "num_outputs": 32,
+                "num_outputs": 512,
                 "kernel_size": [4, 4],
                 "stride": [2, 2],
                 "padding": "same",
