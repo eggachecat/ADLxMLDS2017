@@ -209,7 +209,7 @@ if __name__ == '__main__':
               infer_model=model_obj["infer"])
 
 
-# python main.py -a 0 -dp d:/workstation/adl/data/hw2/ -mp ./outputs/attention/model.ckpt -mt 1
+# python train.py -a 0 -dp d:/workstation/adl/data/hw2/ -mp ./outputs/attention/model.ckpt -mt 1
 
 
 #

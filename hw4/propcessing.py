@@ -1,5 +1,4 @@
 import time
-import progressbar
 import tensorflow as tf
 import numpy as np
 import skimage
